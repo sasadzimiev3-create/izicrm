@@ -42,7 +42,7 @@ GRANT USAGE ON SCHEMA public TO izicrm_app;
 
 ```sql
 CREATE TYPE initial_balance_kind AS ENUM ('BALANCE', 'PROFIT');
-CREATE TYPE archive_reason       AS ENUM ('WITHDRAWN', 'TRANSFERRED');
+CREATE TYPE archive_reason       AS ENUM ('WITHDRAWN', 'TRANSFERRED', 'LOST');
 CREATE TYPE balance_entry_source AS ENUM (
   'CARD_CREATED',          -- начальный баланс при создании карты
   'DAILY_UPDATE',          -- обычное ежедневное обновление
@@ -296,6 +296,13 @@ WHERE c.archived_on IS NOT NULL AND c.archive_reason = 'WITHDRAWN';
 Депозит соединяется напрямую: запись на `created_on` существует всегда, поскольку создание
 карты её пишет, а исправления вытесняют предыдущую, сохраняя ровно одну актуальную.
 Именно поэтому исправление опечатки автоматически исправляет депозит (см. `financial-model.md` §4).
+
+Во вью попадает только `WITHDRAWN`. Две другие причины потока не дают, но по разным основаниям:
+`TRANSFERRED` — потому что остаток уже зачислен карте-получателю и капитал не изменился,
+`LOST` — потому что падение капитала и есть убыток (T-9). Добавить `LOST` в это условие означало бы
+молча обнулить все убытки от потерянных карт, поэтому `archive_reason = 'WITHDRAWN'` записано
+явным равенством, а не как `<> 'TRANSFERRED'`: при появлении новой причины архивирования
+условие не подхватит её по умолчанию.
 
 ---
 
