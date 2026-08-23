@@ -80,6 +80,7 @@ CREATE TABLE cards (
   name           TEXT        NOT NULL,
   name_norm      TEXT        NOT NULL
                  GENERATED ALWAYS AS (lower(btrim(regexp_replace(name, '\s+', ' ', 'g')))) STORED,
+  icon           TEXT,
   initial_kind   initial_balance_kind NOT NULL,
   created_on     DATE        NOT NULL,
   archived_on    DATE,
@@ -89,6 +90,9 @@ CREATE TABLE cards (
 
   CONSTRAINT cards_name_not_blank    CHECK (btrim(name) <> ''),
   CONSTRAINT cards_name_len          CHECK (char_length(name) BETWEEN 1 AND 64),
+  -- C-20: декоративный стикер, ровно один символ; длина ограничена, чтобы произвольный
+  -- текст не попал в вывод как часть названия
+  CONSTRAINT cards_icon_single_char  CHECK (icon IS NULL OR char_length(icon) BETWEEN 1 AND 8),
   CONSTRAINT cards_archive_coherent  CHECK (
     (archived_on IS NULL AND archived_at IS NULL AND archive_reason IS NULL) OR
     (archived_on IS NOT NULL AND archived_at IS NOT NULL AND archive_reason IS NOT NULL)
@@ -110,6 +114,11 @@ CREATE INDEX cards_user_scope_idx  ON cards (user_id, created_on, archived_on);
 `name_norm` — сгенерированный столбец: `trim`, сжатие внутренних пробелов, нижний регистр.
 Именно он участвует в уникальности, поэтому `«Сбер1»`, `«сбер1»` и `«Сбер1 »` — одна карта (C-6).
 `initial_kind` неизменяем после создания (проверяется в сервисе и триггером ниже).
+
+`icon` — декоративный эмодзи-маркер материала (C-20). Расчётного смысла не имеет и в формулах
+не участвует; `NULL` означает «без маркера». Значение проверяется по белому списку эмодзи в слое
+`application` — ограничение в БД задаёт только границу длины, потому что валидация графем
+в `CHECK` нечитаема и ломается при обновлении Unicode.
 
 ### 3.4. `balance_entries`
 
