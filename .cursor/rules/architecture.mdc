@@ -1,0 +1,70 @@
+---
+description: Границы слоёв, направление зависимостей, структура модулей
+globs: src/**/*.ts
+alwaysApply: false
+---
+
+# Архитектура
+
+```
+interface/telegram → application → domain ← infrastructure → PostgreSQL
+```
+
+## Направление зависимостей
+
+| Слой | Может импортировать | Запрещено импортировать |
+|---|---|---|
+| `domain` | только `domain` | всё остальное, включая `pg` и `grammy` |
+| `application` | `domain`, `application/ports` | `infrastructure`, `grammy` |
+| `infrastructure` | `domain`, `application/ports` | `interface` |
+| `interface` | `application`, `domain` (типы, форматирование) | `infrastructure`, SQL |
+
+Проверяется ESLint-правилом `import/no-restricted-paths`. Нарушение — ошибка сборки.
+
+## Что где лежит
+
+- `domain` — чистые функции над `Decimal`: балансы, капитал, потоки, P&L, имена карт.
+  Ни I/O, ни SQL, ни `Date.now()`.
+- `application` — сценарии: загрузить данные, вызвать domain, записать результат. Владеет
+  транзакциями через `UnitOfWork`. Обращается к БД только через порты.
+- `infrastructure` — реализация портов: репозитории, адаптеры Excel и Telegram-транспорта.
+  Бизнес-логики не содержит.
+- `interface/telegram` — handlers, FSM, клавиатуры, чистые view-функции. Ни арифметики,
+  ни SQL, ни правил предметной области.
+
+## Handlers без бизнес-логики
+
+```ts
+// ❌ ПЛОХО
+bot.on('message', async (ctx) => {
+  const cards = await db.selectFrom('cards')...;
+  const total = cards.reduce((s, c) => s + Number(c.balance), 0);
+  await ctx.reply(`Итого: ${total}`);
+});
+
+// ✅ ХОРОШО
+bot.on('message', async (ctx) => {
+  const vm = await dashboardService.getDashboard(ctx.userId, ctx.businessDate);
+  await ctx.reply(renderDashboard(vm), { reply_markup: mainKeyboard(vm.stateRev) });
+});
+```
+
+Handler делает три вещи: разбирает апдейт, вызывает сервис, отдаёт результат во view.
+
+## Доступ к БД только через Unit of Work
+
+```ts
+await uow.withUser(userId, async (tx) => {
+  const cards = await cardRepo.listInScope(tx, userId, date);
+});
+```
+
+`withUser` открывает транзакцию и выставляет RLS-контекст. Прямое использование пула
+в репозиториях запрещено: без контекста RLS вернёт ноль строк (fail-closed).
+
+## Порты
+
+Внешние зависимости прячутся за интерфейсом в `application/ports`. Так библиотека Excel
+меняется без правки бизнес-логики и тестов расчётов (ADR-006).
+
+Подробнее: `docs/architecture.md`, ADR-001…ADR-010.

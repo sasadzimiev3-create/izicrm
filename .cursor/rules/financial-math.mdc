@@ -1,0 +1,68 @@
+---
+description: Правила финансовой математики — Decimal, округление, единый источник истины для P&L
+globs: src/domain/**/*.ts,src/application/**/*.ts
+alwaysApply: false
+---
+
+# Финансовая математика
+
+Формулы и обоснования: `docs/financial-model.md`. Отклонение от них — ошибка.
+
+## Единый источник истины
+
+Вся прибыль считается через `domain/finance/pnl.ts:periodPnl`:
+
+```
+PnL(u, A, B) = Cap(u, B) − Cap(u, A − 1 день) − NetFlow(u, [A, B])
+```
+
+`dailyPnl`, `monthlyPnl`, `allTimePnl` — тонкие обёртки над ней. Вторая реализация формулы
+где-либо ещё (в SQL, в сервисе, в генераторе Excel) запрещена.
+
+## Деньги — только Decimal
+
+```ts
+// ❌ ПЛОХО
+const total = cards.reduce((s, c) => s + Number(c.balance), 0);
+const rounded = Math.round(value * 100) / 100;
+const pct = (delta / prev) * 100;
+
+// ✅ ХОРОШО
+const total = cards.reduce((s, c) => s.plus(c.balance), Money.zero());
+const rounded = value.toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+const pct = percentChange(delta, prev); // PercentResult
+```
+
+Запрещено: `number` для денег · `parseFloat` · `Number(decimal)` · `Math.round` · `toFixed`
+для расчётов · JSON-числа для сумм (в `JSONB` и FSM-payload деньги — строки) · `SUM()` по
+деньгам в SQL. Единственное разрешённое `Decimal → number` — запись ячейки Excel в
+`infrastructure/excel/`.
+
+## Процент никогда не голое число
+
+```ts
+type PercentResult =
+  | { defined: true; value: Decimal }
+  | { defined: false; reason: 'ZERO_BASE' | 'NEGATIVE_BASE' | 'NO_PREVIOUS_DATA' };
+```
+
+При базе ≤ 0 доходность математически не определена. Тип запрещает случайно показать `0%`
+вместо `—`. Деления на ноль в коде быть не должно ни при каких данных.
+
+## Округление
+
+Промежуточные значения не округляются. Округление — последняя операция перед выводом или
+записью: `ROUND_HALF_UP`, 2 знака для денег и для процентов. Ввод с более чем 2 знаками
+после запятой **отклоняется с ошибкой**, а не округляется молча.
+
+## P&L карты не существует
+
+По отдельной карте считается `balanceChange` — движение, не результат: деньги перемещаются
+между своими картами. Имя `cardProfit` или `profit` для карты запрещено. `Σ balanceChange`
+≠ `PnL` пользователя, и это не ошибка.
+
+## Детерминированность
+
+`domain` не вызывает `Date.now()` и `new Date()`. Текущая дата передаётся параметром.
+Каждая новая формула требует unit-тестов и записи в матрицу `docs/financial-model.md` §10.
+Теоремы T-1…T-8 должны продолжать выполняться.

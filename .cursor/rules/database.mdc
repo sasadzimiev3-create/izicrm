@@ -1,0 +1,61 @@
+---
+description: Правила PostgreSQL — numeric, миграции, append-only, LOCF-запросы
+globs: migrations/**/*.sql,src/infrastructure/**/*.ts
+alwaysApply: false
+---
+
+# База данных
+
+Схема и обоснования: `docs/database.md`.
+
+## Деньги и типы
+
+- Деньги — `NUMERIC(20,2)`. `float`, `double precision`, `real` запрещены везде.
+- `pg` возвращает `NUMERIC` и `BIGINT` строками. Регистрировать type parser, превращающий их
+  в `number`, запрещено — это молчаливая потеря точности.
+- Числовые литералы в SQL писать как `1000000000000000.00`, не `1e15`: экспоненциальная форма
+  даёт `float8`-константу.
+- Бизнес-дата — `DATE`, момент времени — `TIMESTAMPTZ`. Не смешивать.
+
+## Арифметика над деньгами в SQL запрещена
+
+```sql
+-- ❌ ПЛОХО: второй источник истины со своими правилами округления
+SELECT SUM(amount) AS capital FROM balance_entries WHERE ...;
+
+-- ✅ ХОРОШО: SQL выбирает строки, Decimal в domain считает
+SELECT DISTINCT ON (card_id) card_id, amount, effective_date
+FROM v_current_balance_entries
+WHERE user_id = $1 AND effective_date <= $2
+ORDER BY card_id, effective_date DESC;
+```
+
+## Append-only
+
+`balance_entries` неизменяема. Исправление — вставка новой записи и логическое вытеснение
+предыдущей (`superseded_at`, `superseded_by`) в одной транзакции. `DELETE` заблокирован
+правилом, `UPDATE` сумм — триггером. Роль приложения не имеет права `DELETE`.
+
+На пару `(card_id, effective_date)` существует не более одной актуальной записи — частичный
+unique-индекс `WHERE superseded_at IS NULL`.
+
+## Потоки капитала — VIEW, не таблица
+
+`v_capital_flows` выводится из `cards` и `balance_entries`. Хранимый поток рассинхронизируется
+с исправленным начальным балансом и даёт фантомный убыток (`docs/financial-model.md` §4).
+Не превращать в таблицу.
+
+## Обязательно в схеме
+
+- FK на все связи, `ON DELETE RESTRICT` для финансовых данных.
+- Композитный FK `(user_id, card_id) → cards (user_id, id)` — делает межпользовательские
+  строки невозможными на уровне схемы.
+- `user_id` в каждой пользовательской таблице + RLS-политика.
+- Частичные индексы под фактические запросы: LOCF, активные карты, поиск предыдущей даты.
+- VIEW создаются с `WITH (security_invoker = true)`, иначе RLS базовых таблиц не применится.
+
+## Миграции
+
+Только вперёд, только через `migrations/NNN_*.sql`, выполняются ролью `izicrm_migrator`.
+Ручные `ALTER` на боевой базе запрещены. Приложение на старте проверяет, что все миграции
+применены, иначе не поднимается.
