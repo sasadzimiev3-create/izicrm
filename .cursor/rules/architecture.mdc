@@ -67,4 +67,4 @@ await uow.withUser(userId, async (tx) => {
 Внешние зависимости прячутся за интерфейсом в `application/ports`. Так библиотека Excel
 меняется без правки бизнес-логики и тестов расчётов (ADR-006).
 
-Подробнее: `docs/architecture.md`, ADR-001…ADR-010.
+Подробнее: `docs/architecture.md`, ADR-001…ADR-011.

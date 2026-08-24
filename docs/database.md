@@ -27,12 +27,17 @@ CREATE ROLE izicrm_migrator LOGIN PASSWORD :'migrator_password';
 -- рабочая роль приложения: только DML, БЕЗ BYPASSRLS, НЕ суперпользователь
 CREATE ROLE izicrm_app LOGIN PASSWORD :'app_password';
 
+-- очистка служебных таблиц; финансовых данных не видит (ADR-011)
+CREATE ROLE izicrm_maintenance LOGIN PASSWORD :'maintenance_password';
+
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
 GRANT USAGE ON SCHEMA public TO izicrm_app;
+GRANT USAGE ON SCHEMA public TO izicrm_maintenance;
 ```
 
 Приложение подключается **только** как `izicrm_app`. Проверяется тестом: попытка запуска под
-ролью с `BYPASSRLS` или `SUPERUSER` завершается ошибкой на старте.
+ролью с `BYPASSRLS` или `SUPERUSER` завершается ошибкой на старте. Роль `izicrm_maintenance`
+в рантайме бота не используется: её вызывает только регламент очистки (этап 8).
 
 ---
 
@@ -211,6 +216,8 @@ CREATE INDEX dialog_states_expiry_idx ON dialog_states (expires_at);
 **Деньги в `payload` — строки, не JSON-числа** (JSON-числа двоичные, это нарушило бы NFR-4).
 `business_date` фиксируется на старте диалога (C-11). `state_rev` защищает от устаревших
 кнопок (`docs/telegram-flows.md` §5). `ON DELETE CASCADE` допустим: это не финансовые данные.
+Просроченные строки удаляет роль `izicrm_maintenance` (ADR-011), не приложение: истёкший
+диалог и так читается как `Idle`.
 
 ### 3.6. `processed_updates`
 
@@ -223,7 +230,8 @@ CREATE TABLE processed_updates (
 CREATE INDEX processed_updates_gc_idx ON processed_updates (processed_at);
 ```
 
-Идемпотентность (ADR-009). Очистка записей старше 7 суток по расписанию.
+Идемпотентность (ADR-009). Записи старше 7 суток удаляет `izicrm_maintenance` по расписанию
+(ADR-011), не `izicrm_app`.
 
 ### 3.7. `audit_log`
 
@@ -273,6 +281,7 @@ FROM cards c
 JOIN v_current_balance_entries e
   ON e.card_id = c.id AND e.effective_date = c.created_on
 WHERE c.initial_kind = 'BALANCE'
+  AND e.amount <> 0
 
 UNION ALL
 
@@ -290,7 +299,9 @@ CROSS JOIN LATERAL (
   ORDER BY e.effective_date DESC
   LIMIT 1
 ) AS last_entry
-WHERE c.archived_on IS NOT NULL AND c.archive_reason = 'WITHDRAWN';
+WHERE c.archived_on IS NOT NULL
+  AND c.archive_reason = 'WITHDRAWN'
+  AND last_entry.amount <> 0;
 ```
 
 Депозит соединяется напрямую: запись на `created_on` существует всегда, поскольку создание
@@ -303,6 +314,11 @@ WHERE c.archived_on IS NOT NULL AND c.archive_reason = 'WITHDRAWN';
 молча обнулить все убытки от потерянных карт, поэтому `archive_reason = 'WITHDRAWN'` записано
 явным равенством, а не как `<> 'TRANSFERRED'`: при появлении новой причины архивирования
 условие не подхватит её по умолчанию.
+
+Нулевой остаток при `WITHDRAWN` (удаление пустой карты, вопрос о судьбе не задаётся) из вью
+исключён: `NetFlow` от нуля не меняется, а строка «вывод 0 ₽» в отчёте выглядит как мусор.
+То же для депозита: карта `BALANCE` с начальным нулём потока не создаёт — фильтр
+`e.amount <> 0` на верхней ветке.
 
 ---
 
@@ -351,7 +367,18 @@ END $$;
 GRANT SELECT, INSERT, UPDATE ON cards, balance_entries, dialog_states, audit_log,
                                 processed_updates, users TO izicrm_app;
 GRANT SELECT ON v_current_balance_entries, v_capital_flows TO izicrm_app;
--- DELETE не выдаётся принципиально
+-- DELETE у приложения не выдаётся принципиально (A-4)
+
+-- ADR-011: сборка мусора служебных таблиц. Финансовых таблиц в грантах нет.
+GRANT SELECT, DELETE ON processed_updates, dialog_states TO izicrm_maintenance;
+
+CREATE POLICY processed_updates_gc ON processed_updates
+  FOR DELETE TO izicrm_maintenance
+  USING (processed_at < now() - interval '7 days');
+
+CREATE POLICY dialog_states_gc ON dialog_states
+  FOR DELETE TO izicrm_maintenance
+  USING (expires_at < now());
 ```
 
 `current_setting(..., true)` возвращает `NULL`, если GUC не выставлен ⟹ условие политики ложно
@@ -457,6 +484,7 @@ migrations/
   0010_views.sql
   0011_row_level_security.sql
   0012_grants.sql
+  0013_maintenance_role.sql
 ```
 
 Правила: только вперёд, каждая миграция транзакционна и идемпотентна по проверкам;
@@ -485,3 +513,4 @@ migrations/
 | DB-13 | LOCF-запрос корректен при пропущенных днях и вытесненных записях |
 | DB-14 | `v_capital_flows` соответствует §4 модели на наборе фикстур |
 | DB-15 | Все миграции применяются на чистой базе и дают ожидаемую схему |
+| DB-16 | `izicrm_maintenance` не имеет `SELECT`/`DELETE` на `cards` и `balance_entries`; `DELETE` живой строки `dialog_states` (`expires_at > now()`) удаляет 0 строк |
