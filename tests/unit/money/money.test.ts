@@ -57,6 +57,10 @@ describe('Money', () => {
     expect(() => Money.from('Infinity')).toThrow(ValidationError);
     expect(() => Money.from('NaN')).toThrow(ValidationError);
     expect(() => Money.from('1.001')).toThrowError('Копейки — не более двух знаков');
+    expect(() => Money.from('1e5')).toThrowError('Некорректная сумма');
+    expect(() => Money.from('1E-2')).toThrowError('Некорректная сумма');
+    expect(() => Money.from('0x10')).toThrowError('Некорректная сумма');
+    expect(() => Money.from('+10')).toThrowError('Некорректная сумма');
   });
 
   it('сериализация — строка со шкалой 2, не JSON-число', () => {

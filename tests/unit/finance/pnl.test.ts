@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { ValidationError } from '../../../src/domain/errors.js';
 import { formatPercent } from '../../../src/domain/money/format.js';
 import { addDays } from '../../../src/domain/finance/period.js';
 import {
@@ -594,5 +595,10 @@ describe('прочие сценарии матрицы', () => {
       expectMoney(all.totalDeposits, '10000');
       expectMoney(all.totalWithdrawals, '0');
     }
+  });
+
+  it('from > to — ошибка, не нулевой P&L', () => {
+    const { ledger } = twoDay('10000', '11000');
+    expect(() => periodPnl(ledger, d('2024-08-20'), d('2024-08-19'))).toThrow(ValidationError);
   });
 });

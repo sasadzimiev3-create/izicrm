@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { ValidationError } from '../../../src/domain/errors.js';
 import { normalizeCardName } from '../../../src/domain/cards/card-name.js';
 import { cardId, userId } from '../../../src/domain/cards/card.js';
 
@@ -29,8 +30,15 @@ describe('normalizeCardName', () => {
 });
 
 describe('идентификаторы карты', () => {
-  it('branded-конструкторы сохраняют значение', () => {
+  it('бренд-конструкторы сохраняют целое > 0', () => {
     expect(cardId(7)).toBe(7);
     expect(userId(3)).toBe(3);
+  });
+
+  it('отклоняет нецелые, нулевые и небезопасные идентификаторы', () => {
+    expect(() => cardId(0)).toThrow(ValidationError);
+    expect(() => userId(1.5)).toThrow(ValidationError);
+    expect(() => userId(Number('9223372036854775807'))).toThrow(ValidationError);
+    expect(() => cardId(-1)).toThrow(ValidationError);
   });
 });

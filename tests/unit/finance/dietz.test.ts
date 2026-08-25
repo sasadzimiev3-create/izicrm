@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { ValidationError } from '../../../src/domain/errors.js';
 import { Decimal } from '../../../src/domain/money/money.js';
 import { formatPercent } from '../../../src/domain/money/format.js';
 import { modifiedDietzReturn } from '../../../src/domain/finance/dietz.js';
@@ -48,5 +49,12 @@ describe('modifiedDietzReturn', () => {
       defined: false,
       reason: 'NEGATIVE_BASE',
     });
+  });
+
+  it('from > to — ошибка, не деление на T ≤ 0', () => {
+    const ledger = exampleP2();
+    expect(() => modifiedDietzReturn(ledger, d('2024-08-31'), d('2024-08-01'))).toThrow(
+      ValidationError,
+    );
   });
 });

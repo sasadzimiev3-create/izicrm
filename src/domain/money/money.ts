@@ -31,6 +31,10 @@ export class Money {
    * @see docs/financial-model.md §8, docs/requirements.md C-12
    */
   static from(amount: string): Money {
+    // Каноническая десятичная запись: не 1e5, не 0x10, не "+1" (C-10).
+    if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(amount)) {
+      throw new ValidationError('Некорректная сумма');
+    }
     let value: Decimal;
     try {
       value = new Decimal(amount);

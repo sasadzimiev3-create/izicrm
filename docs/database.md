@@ -33,6 +33,8 @@ CREATE ROLE izicrm_maintenance LOGIN PASSWORD :'maintenance_password';
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
 GRANT USAGE ON SCHEMA public TO izicrm_app;
 GRANT USAGE ON SCHEMA public TO izicrm_maintenance;
+ALTER ROLE izicrm_app SET search_path = public;
+ALTER ROLE izicrm_maintenance SET search_path = public;
 ```
 
 Приложение подключается **только** как `izicrm_app`. Проверяется тестом: попытка запуска под
@@ -46,17 +48,20 @@ GRANT USAGE ON SCHEMA public TO izicrm_maintenance;
 ### 3.1. Типы
 
 ```sql
-CREATE TYPE initial_balance_kind AS ENUM ('BALANCE', 'PROFIT');
 CREATE TYPE archive_reason       AS ENUM ('WITHDRAWN', 'TRANSFERRED', 'LOST');
 CREATE TYPE balance_entry_source AS ENUM (
   'CARD_CREATED',          -- начальный баланс при создании карты
   'DAILY_UPDATE',          -- обычное ежедневное обновление
+  'TOP_UP',                -- пополнение существующей карты (C-26)
+  'SPEND',                 -- трата без удаления (C-30)
   'CORRECTION',            -- исправление за уже закрытую дату
   'ARCHIVE_TRANSFER_IN',   -- приход остатка с архивируемой карты (C-3)
   'ARCHIVE_ZERO_OUT'       -- обнуление архивируемой карты при переводе
 );
 CREATE TYPE capital_flow_kind    AS ENUM ('DEPOSIT', 'WITHDRAWAL');
 ```
+
+Типа `initial_balance_kind` нет (C-29).
 
 ### 3.2. `users`
 
@@ -86,18 +91,26 @@ CREATE TABLE cards (
   name_norm      TEXT        NOT NULL
                  GENERATED ALWAYS AS (lower(btrim(regexp_replace(name, '\s+', ' ', 'g')))) STORED,
   icon           TEXT,
-  initial_kind   initial_balance_kind NOT NULL,
   created_on     DATE        NOT NULL,
+  frozen_on      DATE,
+  frozen_at      TIMESTAMPTZ,
   archived_on    DATE,
   archive_reason archive_reason,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   archived_at    TIMESTAMPTZ,
 
-  CONSTRAINT cards_name_not_blank    CHECK (btrim(name) <> ''),
+  CONSTRAINT cards_name_not_blank    CHECK (name_norm <> ''),
   CONSTRAINT cards_name_len          CHECK (char_length(name) BETWEEN 1 AND 64),
   -- C-20: декоративный стикер, ровно один символ; длина ограничена, чтобы произвольный
   -- текст не попал в вывод как часть названия
   CONSTRAINT cards_icon_single_char  CHECK (icon IS NULL OR char_length(icon) BETWEEN 1 AND 8),
+  CONSTRAINT cards_freeze_coherent CHECK (
+    (frozen_on IS NULL AND frozen_at IS NULL) OR
+    (frozen_on IS NOT NULL AND frozen_at IS NOT NULL)
+  ),
+  CONSTRAINT cards_freeze_not_archived CHECK (
+    frozen_on IS NULL OR archived_on IS NULL
+  ),
   CONSTRAINT cards_archive_coherent  CHECK (
     (archived_on IS NULL AND archived_at IS NULL AND archive_reason IS NULL) OR
     (archived_on IS NOT NULL AND archived_at IS NOT NULL AND archive_reason IS NOT NULL)
@@ -113,12 +126,18 @@ CREATE UNIQUE INDEX cards_active_name_uniq
   ON cards (user_id, name_norm) WHERE archived_on IS NULL;
 
 CREATE INDEX cards_user_active_idx ON cards (user_id) WHERE archived_on IS NULL;
+CREATE INDEX cards_user_working_idx ON cards (user_id) WHERE archived_on IS NULL AND frozen_on IS NULL;
 CREATE INDEX cards_user_scope_idx  ON cards (user_id, created_on, archived_on);
 ```
 
 `name_norm` — сгенерированный столбец: `trim`, сжатие внутренних пробелов, нижний регистр.
 Именно он участвует в уникальности, поэтому `«Сбер1»`, `«сбер1»` и `«Сбер1 »` — одна карта (C-6).
-`initial_kind` неизменяем после создания (проверяется в сервисе и триггером ниже).
+CHECK `name_norm <> ''`: `btrim(name)` пропускает `\t`/`\n`, и имя становилось бы невидимым.
+Замороженные карты в уникальность входят: они не архивны.
+
+`frozen_on` / `frozen_at` — текущая заморозка (C-27). Оба NULL или оба NOT NULL.
+Архивная карта замороженной быть не может. Разморозка обнуляет оба поля; история
+заморозок не хранится.
 
 `icon` — декоративный эмодзи-маркер материала (C-20). Расчётного смысла не имеет и в формулах
 не участвует; `NULL` означает «без маркера». Значение проверяется по белому списку эмодзи в слое
@@ -136,6 +155,8 @@ CREATE TABLE balance_entries (
   card_id        BIGINT       NOT NULL,
   effective_date DATE         NOT NULL,
   amount         NUMERIC(20,2) NOT NULL,
+  capital_in     NUMERIC(20,2) NOT NULL DEFAULT 0,
+  capital_out    NUMERIC(20,2) NOT NULL DEFAULT 0,
   source         balance_entry_source NOT NULL,
   recorded_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
   superseded_at  TIMESTAMPTZ,
@@ -145,7 +166,9 @@ CREATE TABLE balance_entries (
     REFERENCES cards (user_id, id) ON DELETE RESTRICT,
   CONSTRAINT be_supersede_coherent CHECK ((superseded_at IS NULL) = (superseded_by IS NULL)),
   -- литералы записаны как numeric, не как 1e15: экспоненциальная форма даёт float8-константу
-  CONSTRAINT be_amount_bounded CHECK (amount BETWEEN -1000000000000000.00 AND 1000000000000000.00)
+  CONSTRAINT be_amount_bounded CHECK (amount BETWEEN -1000000000000000.00 AND 1000000000000000.00),
+  CONSTRAINT be_capital_in_bounded CHECK (capital_in BETWEEN 0 AND 1000000000000000.00),
+  CONSTRAINT be_capital_out_bounded CHECK (capital_out BETWEEN 0 AND 1000000000000000.00)
 );
 
 -- FR-3.5: не более одной актуальной записи на (карта, бизнес-дата)
@@ -160,6 +183,10 @@ CREATE INDEX be_locf_idx
 CREATE INDEX be_user_date_idx
   ON balance_entries (user_id, effective_date DESC) WHERE superseded_at IS NULL;
 ```
+
+**Про `capital_in` / `capital_out` (C-26, C-30).** Внешний ввод и трата без удаления,
+отнесённые к этой записи. Не прибыль и не убыток. Обновление баланса поля не трогает.
+CHECK запрещает отрицательные значения: знак задаёт, какое из двух полей растёт.
 
 **Композитный FK `(user_id, card_id) → cards (user_id, id)`** — структурная гарантия: запись
 баланса физически не может ссылаться на карту другого пользователя. Это защита уровня схемы,
@@ -176,6 +203,8 @@ CREATE OR REPLACE FUNCTION be_immutable() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF OLD.amount        IS DISTINCT FROM NEW.amount
+  OR OLD.capital_in    IS DISTINCT FROM NEW.capital_in
+  OR OLD.capital_out   IS DISTINCT FROM NEW.capital_out
   OR OLD.effective_date IS DISTINCT FROM NEW.effective_date
   OR OLD.card_id       IS DISTINCT FROM NEW.card_id
   OR OLD.user_id       IS DISTINCT FROM NEW.user_id
@@ -262,7 +291,7 @@ CREATE INDEX audit_log_user_idx ON audit_log (user_id, created_at DESC);
 
 ```sql
 CREATE VIEW v_current_balance_entries WITH (security_invoker = true) AS
-SELECT id, user_id, card_id, effective_date, amount, source, recorded_at
+SELECT id, user_id, card_id, effective_date, amount, capital_in, capital_out, source, recorded_at
 FROM balance_entries
 WHERE superseded_at IS NULL;
 ```
@@ -271,17 +300,25 @@ WHERE superseded_at IS NULL;
 
 ```sql
 CREATE VIEW v_capital_flows WITH (security_invoker = true) AS
--- депозит: начальный баланс карты типа BALANCE
-SELECT c.user_id,
-       c.id                       AS card_id,
-       c.created_on               AS flow_date,
+-- депозит: capital_in актуальной записи (создание и пополнения, C-26)
+SELECT e.user_id,
+       e.card_id,
+       e.effective_date           AS flow_date,
        'DEPOSIT'::capital_flow_kind AS kind,
-       e.amount                   AS amount
-FROM cards c
-JOIN v_current_balance_entries e
-  ON e.card_id = c.id AND e.effective_date = c.created_on
-WHERE c.initial_kind = 'BALANCE'
-  AND e.amount <> 0
+       e.capital_in               AS amount
+FROM v_current_balance_entries e
+WHERE e.capital_in <> 0
+
+UNION ALL
+
+-- трата без удаления: capital_out актуальной записи (C-30)
+SELECT e.user_id,
+       e.card_id,
+       e.effective_date,
+       'WITHDRAWAL'::capital_flow_kind,
+       e.capital_out
+FROM v_current_balance_entries e
+WHERE e.capital_out <> 0
 
 UNION ALL
 
@@ -304,9 +341,8 @@ WHERE c.archived_on IS NOT NULL
   AND last_entry.amount <> 0;
 ```
 
-Депозит соединяется напрямую: запись на `created_on` существует всегда, поскольку создание
-карты её пишет, а исправления вытесняют предыдущую, сохраняя ровно одну актуальную.
-Именно поэтому исправление опечатки автоматически исправляет депозит (см. `financial-model.md` §4).
+Депозит читается с `capital_in` актуальной записи. Исправление за ту же дату вытесняет
+строку целиком — поток следует за балансом (C-26, `financial-model.md` §4).
 
 Во вью попадает только `WITHDRAWN`. Две другие причины потока не дают, но по разным основаниям:
 `TRANSFERRED` — потому что остаток уже зачислен карте-получателю и капитал не изменился,
@@ -315,10 +351,11 @@ WHERE c.archived_on IS NOT NULL
 явным равенством, а не как `<> 'TRANSFERRED'`: при появлении новой причины архивирования
 условие не подхватит её по умолчанию.
 
-Нулевой остаток при `WITHDRAWN` (удаление пустой карты, вопрос о судьбе не задаётся) из вью
-исключён: `NetFlow` от нуля не меняется, а строка «вывод 0 ₽» в отчёте выглядит как мусор.
-То же для депозита: карта `BALANCE` с начальным нулём потока не создаёт — фильтр
-`e.amount <> 0` на верхней ветке.
+Нулевой `capital_in` и нулевой вывод из вью исключены: `NetFlow` от нуля не меняется,
+а строка «депозит 0 ₽» в отчёте выглядит как мусор. Создание карты с нулевым балансом
+и удаление пустого материала строк не оставляют.
+
+Заморозка во вью не представлена: потока она не создаёт (C-27).
 
 ---
 
@@ -364,8 +401,9 @@ BEGIN
   END LOOP;
 END $$;
 
-GRANT SELECT, INSERT, UPDATE ON cards, balance_entries, dialog_states, audit_log,
+GRANT SELECT, INSERT, UPDATE ON cards, balance_entries, dialog_states,
                                 processed_updates, users TO izicrm_app;
+GRANT SELECT, INSERT ON audit_log TO izicrm_app;
 GRANT SELECT ON v_current_balance_entries, v_capital_flows TO izicrm_app;
 -- DELETE у приложения не выдаётся принципиально (A-4)
 
@@ -408,7 +446,7 @@ await uow.withUser(userId, async (tx) => { /* всё остальное */ });
 ### 6.1. LOCF-снимок на дату
 
 ```sql
-SELECT DISTINCT ON (e.card_id) e.card_id, e.amount, e.effective_date
+SELECT DISTINCT ON (e.card_id) e.card_id, e.amount, e.capital_in, e.capital_out, e.effective_date
 FROM v_current_balance_entries e
 JOIN cards c ON c.id = e.card_id
 WHERE e.user_id = $1
@@ -514,3 +552,4 @@ migrations/
 | DB-14 | `v_capital_flows` соответствует §4 модели на наборе фикстур |
 | DB-15 | Все миграции применяются на чистой базе и дают ожидаемую схему |
 | DB-16 | `izicrm_maintenance` не имеет `SELECT`/`DELETE` на `cards` и `balance_entries`; `DELETE` живой строки `dialog_states` (`expires_at > now()`) удаляет 0 строк |
+| DB-17 | `capital_in < 0` ⟹ ошибка CHECK; заморозка архивной карты ⟹ ошибка CHECK; `v_capital_flows` включает пополнение и не включает заморозку |

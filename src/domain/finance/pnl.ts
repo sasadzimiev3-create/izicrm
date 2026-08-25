@@ -11,6 +11,7 @@ import { capitalAsOf } from './capital.js';
 import { netDeposits, netFlow, totalArchiveWithdrawals } from './flows.js';
 import {
   addDays,
+  assertClosedRange,
   compareDates,
   daysBetween,
   minDate,
@@ -47,6 +48,7 @@ export type AllTimePnl =
  * @see docs/financial-model.md §5
  */
 export function periodPnl(ledger: Ledger, from: BusinessDate, to: BusinessDate): PeriodPnl {
+  assertClosedRange(from, to);
   const indexed = indexLedger(ledger);
   const openingCapital = capitalAsOf(indexed, addDays(from, -1));
   const closingCapital = capitalAsOf(indexed, to);

@@ -19,7 +19,7 @@
 | Валидация | Zod | 4.x | Разбор ввода пользователя, `JSONB`-payload FSM, переменных окружения |
 | Excel | `@office-kit/xlsx` | 0.9.0, точная версия | Единственная живая MIT-библиотека с нативными графиками (ADR-006) |
 | Тесты | Vitest | 4.x | Нативный TS, быстрый watch |
-| Property-тесты | fast-check | 4.x | Проверка теорем T-1…T-9 |
+| Property-тесты | fast-check | 4.x | Проверка теорем T-1…T-11 |
 | Интеграционные тесты | Testcontainers | — | Реальный PostgreSQL: RLS, индексы, LOCF-SQL |
 | Логи | pino | — | Структурные логи, редакция чувствительных полей |
 | Прочее | ESLint + Prettier, Docker Compose, GitHub Actions | — | |
@@ -81,7 +81,8 @@ src/
     ports/           card-repository.ts  balance-repository.ts
                      dialog-state-repository.ts  unit-of-work.ts  xlsx-writer.ts
     services/        dashboard.service.ts  card.service.ts
-                     balance-update.service.ts  archive.service.ts  report.service.ts
+                     balance-update.service.ts  topup.service.ts
+                     freeze.service.ts  spend.service.ts  archive.service.ts  report.service.ts
     dto/
   infrastructure/
     db/              pool.ts  unit-of-work.ts  user-context.ts  types.ts
@@ -92,7 +93,8 @@ src/
   interface/telegram/
     fsm/             states.ts  transitions.ts  machine.ts  guards.ts
     handlers/        start.ts  dashboard.ts  card-create.ts  card-rename.ts
-                     card-archive.ts  balance-update.ts  report.ts
+                     card-archive.ts  card-topup.ts  card-freeze.ts  card-spend.ts
+                     balance-update.ts  report.ts
     keyboards/       callback-data.ts  keyboards.ts
     views/           dashboard.view.ts  cards.view.ts  update.view.ts
   config/            env.ts  clock.ts
@@ -125,8 +127,10 @@ docs/
 
 ### ADR-003. Внешние потоки производные, а не хранимые
 
-См. `docs/financial-model.md` §4. Хранимый поток рассинхронизируется с исправленным начальным
-балансом и даёт фантомный убыток. Потоки — SQL VIEW над `cards` + `balance_entries`.
+См. `docs/financial-model.md` §4. Депозиты живут в поле `capital_in` записи баланса
+и вытесняются вместе с ней (C-26). Выводы по-прежнему выводятся из архивирования
+`WITHDRAWN`. Отдельная таблица потоков запрещена: она рассинхронизируется с исправленным
+балансом и даёт фантомный убыток.
 
 ### ADR-004. Собственная FSM вместо grammY conversations
 
@@ -245,11 +249,13 @@ RLS на этих двух таблицах остаётся включённы�
   → DashboardService.getDashboard(userId, today)
       uow.withUser(userId):
         cardRepo.listInScope(userId, today)
+        cardRepo.listFrozen(userId, today)
         balanceRepo.locfSnapshot(userId, today)          — SQL: DISTINCT ON
         balanceRepo.previousUpdateDate(userId, today)
         balanceRepo.locfSnapshot(userId, prevDate)
         cardRepo.flowsInRange(userId, monthStart, today)  — VIEW v_capital_flows
-      → domain: capitalAsOf, periodPnl (месяц), dailyPnl, cardBalanceChange
+      → domain: capitalAsOf, workingCapitalAsOf, frozenCapitalAsOf,
+                periodPnl (месяц), dailyPnl, cardBalanceChange
       → DashboardViewModel
   → views/dashboard.view.ts → текст + клавиатура
 ```
@@ -259,8 +265,9 @@ RLS на этих двух таблицах остаётся включённы�
 ### 5.2. Обновление всех балансов
 
 ```
-[🔄 Обновить баланс] → [Все карты]
+[🔄 Обновить баланс] → [Все в обороте]
   → FSM: Idle → BalanceUpdateAwaitingAmount { queue, index: 0, businessDate: today }
+  → queue = незамороженные карты в scope; замороженные не входят (C-27)
   → на каждый ввод:
       парсинг суммы (Zod + domain/money/parse)   — ошибка не продвигает состояние
       guard: карта всё ещё принадлежит пользователю и активна
@@ -292,8 +299,8 @@ RLS на этих двух таблицах остаётся включённы�
 | Класс | Поведение |
 |---|---|
 | `ValidationError` (ввод пользователя) | Понятное сообщение, состояние не меняется, повторный запрос |
-| `ConflictError` (дубль имени, `23505`) | «Карта с таким названием уже есть» |
-| `NotFoundError` / чужой `card_id` | Нейтральное «Карта не найдена» — без раскрытия существования; запись в лог безопасности |
+| `ConflictError` (дубль имени, `23505`) | «Материал с таким названием уже есть» |
+| `NotFoundError` / чужой `card_id` | Нейтральное «Материал не найден» — без раскрытия существования; запись в лог безопасности |
 | `StaleCallbackError` | «Кнопка устарела», перерисовка экрана |
 | Инфраструктурные | Лог + «Что-то пошло не так», повтор через backoff; финансовые данные не теряются |
 

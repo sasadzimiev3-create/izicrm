@@ -93,6 +93,16 @@ export function compareDates(left: BusinessDate, right: BusinessDate): number {
   return 0;
 }
 
+/**
+ * Интервал `[from, to]` включительно. `from > to` — ошибка, не «пустой период»:
+ * иначе `periodPnl` и Dietz молча считают чужой P&L / делят на T ≤ 0.
+ */
+export function assertClosedRange(from: BusinessDate, to: BusinessDate): void {
+  if (compareDates(from, to) > 0) {
+    throw new ValidationError('Некорректный период');
+  }
+}
+
 export function minDate(left: BusinessDate, right: BusinessDate): BusinessDate {
   return compareDates(left, right) <= 0 ? left : right;
 }
@@ -105,9 +115,12 @@ export function maxDate(left: BusinessDate, right: BusinessDate): BusinessDate {
  * Сдвиг бизнес-даты на целое число календарных дней. O(1), без `Date.now()`.
  */
 export function addDays(date: BusinessDate, days: number): BusinessDate {
+  if (!Number.isSafeInteger(days)) {
+    throw new ValidationError('Некорректная дата');
+  }
   const { year, month, day } = dateParts(date);
   const shifted = civilFromDays(daysFromCivil(year, month, day) + days);
-  return formatDate(shifted.year, shifted.month, shifted.day);
+  return parseBusinessDate(formatDate(shifted.year, shifted.month, shifted.day));
 }
 
 /**

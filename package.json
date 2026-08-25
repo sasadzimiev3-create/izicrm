@@ -8,11 +8,12 @@
   },
   "description": "Telegram-бот персонального учёта балансов карт и P&L. Только RUB.",
   "scripts": {
-    "dev": "node --import tsx src/main.ts",
-    "test": "vitest run",
-    "test:int": "vitest run tests/integration",
-    "test:security": "vitest run tests/security",
-    "migrate:up": "node-pg-migrate up --database-url-var DATABASE_MIGRATOR_URL",
+    "dev": "node --env-file-if-exists=.env --import tsx src/main.ts",
+    "test": "vitest run --coverage",
+    "test:int": "vitest run --config vitest.db.config.ts tests/integration",
+    "test:security": "vitest run --config vitest.db.config.ts tests/security",
+    "migrate:up": "node --env-file-if-exists=.env ./node_modules/node-pg-migrate/bin/node-pg-migrate.js up --database-url-var DATABASE_MIGRATOR_URL",
+    "migrate:down": "node --env-file-if-exists=.env ./node_modules/node-pg-migrate/bin/node-pg-migrate.js down 20 --database-url-var DATABASE_MIGRATOR_URL",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },

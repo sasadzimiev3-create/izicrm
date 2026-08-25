@@ -13,7 +13,7 @@ alwaysApply: false
 | Уровень | Что проверяет | Инструмент |
 |---|---|---|
 | `tests/unit` | Формулы, парсинг, форматирование, переходы FSM | Vitest |
-| `tests/property` | Теоремы T-1…T-9 на случайных данных | fast-check |
+| `tests/property` | Теоремы T-1…T-12 на случайных данных | fast-check |
 | `tests/integration` | SQL, LOCF, индексы, транзакции, миграции | Testcontainers |
 | `tests/security` | Изоляция пользователей, RLS | Testcontainers |
 | `tests/e2e` | Сценарии через фейковый Telegram-транспорт | Vitest |

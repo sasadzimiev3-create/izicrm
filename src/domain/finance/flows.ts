@@ -8,7 +8,7 @@ import {
   type BalanceEntry,
   type Ledger,
 } from './balance.js';
-import { compareDates, type BusinessDate } from './period.js';
+import { assertClosedRange, compareDates, type BusinessDate } from './period.js';
 
 /**
  * `Deposit(c, D) = I(c, D)`, если запись на дату есть, иначе 0.
@@ -41,6 +41,7 @@ export function deriveWithdrawal(ledger: Ledger, card: Card): Money {
  * @see docs/financial-model.md §4.1
  */
 export function netDeposits(ledger: Ledger, from: BusinessDate, to: BusinessDate): Money {
+  assertClosedRange(from, to);
   let total = Money.zero();
   for (const entry of entriesInClosedRange(ledger, from, to)) {
     total = total.plus(entry.capitalIn);
@@ -58,6 +59,7 @@ export function totalArchiveWithdrawals(
   from: BusinessDate,
   to: BusinessDate,
 ): Money {
+  assertClosedRange(from, to);
   const indexed = indexLedger(ledger);
   let total = Money.zero();
   for (const card of indexed.cards) {
@@ -78,6 +80,7 @@ export function totalArchiveWithdrawals(
  * @see docs/financial-model.md §4.3
  */
 export function netFlow(ledger: Ledger, from: BusinessDate, to: BusinessDate): Money {
+  assertClosedRange(from, to);
   const indexed = indexLedger(ledger);
   let flow = Money.zero();
   for (const entry of entriesInClosedRange(indexed, from, to)) {
@@ -102,6 +105,7 @@ export type SignedFlow = {
  * выводы `WITHDRAWN` как `−Withdrawal`. Нулевые суммы отбрасываются.
  */
 export function signedFlows(ledger: Ledger, from: BusinessDate, to: BusinessDate): SignedFlow[] {
+  assertClosedRange(from, to);
   const indexed = indexLedger(ledger);
   const flows: SignedFlow[] = [];
   for (const entry of entriesInClosedRange(indexed, from, to)) {

@@ -48,6 +48,9 @@ describe('календарная арифметика без Date.now', () => {
     expect(addDays(parseBusinessDate('2024-01-01'), 366)).toBe('2025-01-01');
     expect(addDays(parseBusinessDate('2020-01-01'), 1827)).toBe('2025-01-01');
     expect(addDays(parseBusinessDate('2025-01-01'), -1827)).toBe('2020-01-01');
+    expect(() => addDays(parseBusinessDate('2024-01-01'), 1.5)).toThrow(ValidationError);
+    expect(() => addDays(parseBusinessDate('0001-01-01'), -1)).toThrow(ValidationError);
+    expect(() => addDays(parseBusinessDate('9999-12-31'), 1)).toThrow(ValidationError);
   });
 
   it('daysBetween знаковый, inclusive-разность дат', () => {

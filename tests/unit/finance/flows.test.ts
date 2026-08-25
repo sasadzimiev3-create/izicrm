@@ -134,4 +134,17 @@ describe('topUpDelta / spendDelta', () => {
       'Новый баланс должен быть меньше текущего',
     );
   });
+
+  it('from > to — ошибка, не пустой поток', () => {
+    const ledger = makeLedger(
+      [makeCard({ id: 1, createdOn: '2024-08-01' })],
+      [makeEntry(1, '2024-08-10', '100', '100')],
+    );
+    expect(() => netFlow(ledger, d('2024-08-20'), d('2024-08-10'))).toThrow(ValidationError);
+    expect(() => netDeposits(ledger, d('2024-08-20'), d('2024-08-10'))).toThrow(ValidationError);
+    expect(() => signedFlows(ledger, d('2024-08-20'), d('2024-08-10'))).toThrow(ValidationError);
+    expect(() => totalArchiveWithdrawals(ledger, d('2024-08-20'), d('2024-08-10'))).toThrow(
+      ValidationError,
+    );
+  });
 });
