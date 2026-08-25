@@ -1,0 +1,11 @@
+[Unit]
+Description=izicrm daily database backup with restore verification
+Documentation=file:///opt/izicrm/deploy/README.md
+Requires=izicrm.service
+After=izicrm.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/izicrm
+EnvironmentFile=/opt/izicrm/.env
+ExecStart=/usr/bin/docker compose exec -T postgres /bin/sh /ops/backup.sh

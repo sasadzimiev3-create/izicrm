@@ -2,7 +2,7 @@
 
 Telegram-бот для учёта балансов банковских карт и расчёта прибыли. Валюта — только рубли.
 
-Документация: `docs/`. Порядок работы — `docs/roadmap.md`. Сейчас выполнен этап 0: каркас, команд ещё нет бизнес-логики.
+Документация: `docs/`. Порядок работы — `docs/roadmap.md`. Развёртывание на сервере — `deploy/README.md`.
 
 ## Запуск за пять команд
 
@@ -34,6 +34,9 @@ npm run typecheck && npm run lint && npm test
 | `npm run test:int` | интеграционные тесты (нужен Docker) |
 | `npm run test:security` | изоляция пользователей и RLS (нужен Docker) |
 | `npm run migrate:up` | миграции базы |
+| `npm run build` | компиляция `src/` в `dist/` |
+| `npm run start` | прод-запуск из `dist/main.js` |
 | `npm run dev` | локальный запуск бота |
 
-Docker понадобится с этапа 3. Этапы 0–2 проходят без него.
+На сервере: `docker compose up -d --wait` или systemd-юнит `izicrm.service`
+(после reboot поднимает стек). Подробности — `deploy/README.md`.

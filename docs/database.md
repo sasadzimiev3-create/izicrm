@@ -523,6 +523,7 @@ migrations/
   0011_row_level_security.sql
   0012_grants.sql
   0013_maintenance_role.sql
+  0014_ops_grants.sql
 ```
 
 Правила: только вперёд, каждая миграция транзакционна и идемпотентна по проверкам;

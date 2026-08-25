@@ -1,0 +1,19 @@
+[Unit]
+Description=izicrm Telegram bot (Docker Compose)
+Documentation=file:///opt/izicrm/deploy/README.md
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/izicrm
+EnvironmentFile=/opt/izicrm/.env
+ExecStart=/usr/bin/docker compose up -d --wait --remove-orphans
+ExecStop=/usr/bin/docker compose down
+TimeoutStartSec=180
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target

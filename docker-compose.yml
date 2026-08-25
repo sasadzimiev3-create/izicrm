@@ -1,0 +1,67 @@
+name: izicrm
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: izicrm
+      IZICRM_MAINTENANCE_PASSWORD: ${IZICRM_MAINTENANCE_PASSWORD}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        mkdir -p /backups/wal
+        chown -R postgres:postgres /backups
+        exec docker-entrypoint.sh postgres \
+          -c wal_level=replica \
+          -c archive_mode=on \
+          -c archive_command='test ! -f /backups/wal/%f && cp %p /backups/wal/%f'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - backups:/backups
+      - ./deploy:/ops:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d izicrm"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  migrate:
+    build: .
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_ADMIN_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/izicrm
+      DATABASE_URL: postgres://izicrm_app:${IZICRM_APP_PASSWORD}@postgres:5432/izicrm
+      DATABASE_MIGRATOR_URL: postgres://izicrm_migrator:${IZICRM_MIGRATOR_PASSWORD}@postgres:5432/izicrm
+      DATABASE_MAINTENANCE_URL: postgres://izicrm_maintenance:${IZICRM_MAINTENANCE_PASSWORD}@postgres:5432/izicrm
+    command: ["node", "dist/infrastructure/ops/bootstrap-migrate.js"]
+
+  bot:
+    build: .
+    restart: unless-stopped
+    stop_grace_period: 40s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      DATABASE_URL: postgres://izicrm_app:${IZICRM_APP_PASSWORD}@postgres:5432/izicrm
+      DATABASE_MIGRATOR_URL: postgres://izicrm_migrator:${IZICRM_MIGRATOR_PASSWORD}@postgres:5432/izicrm
+      DATABASE_MAINTENANCE_URL: postgres://izicrm_maintenance:${IZICRM_MAINTENANCE_PASSWORD}@postgres:5432/izicrm
+      TZ: ${TZ:-Europe/Moscow}
+      HEALTH_HOST: 127.0.0.1
+      HEALTH_PORT: "8080"
+    stop_signal: SIGTERM
+
+volumes:
+  pgdata:
+  backups:

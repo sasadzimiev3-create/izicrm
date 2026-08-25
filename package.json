@@ -8,6 +8,8 @@
   },
   "description": "Telegram-бот персонального учёта балансов карт и P&L. Только RUB.",
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
     "dev": "node --env-file-if-exists=.env --import tsx src/main.ts",
     "test": "vitest run --coverage",
     "test:int": "vitest run --config vitest.db.config.ts tests/integration tests/e2e",
