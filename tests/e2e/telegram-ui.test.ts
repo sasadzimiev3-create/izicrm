@@ -1,0 +1,289 @@
+import { describe, expect, it } from 'vitest';
+
+import { encodeCallback } from '../../src/interface/telegram/keyboards/callback-data.js';
+import { COPY } from '../../src/interface/telegram/views/copy.js';
+import { parseCallbackData } from '../../src/interface/telegram/keyboards/callback-data.js';
+import { insertUser, useAppDb, withUser } from '../integration/harness.js';
+
+import { TelegramProbe } from './probe.js';
+
+async function createMaterial(bot: TelegramProbe, name: string, amount: string): Promise<void> {
+  await bot.send('/start');
+  await bot.tapLabel('Пополнить');
+  await bot.tapLabel('Добавить материал');
+  await bot.send(name);
+  await bot.send(amount);
+  await bot.tapLabel('Без стикера');
+}
+
+describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
+  const db = useAppDb();
+
+  it('UI-05: полный проход создания; на главном четыре кнопки (FR-6.2)', async () => {
+    const bot = new TelegramProbe(db.pool(), '601');
+    await insertUser(db.pool(), '601');
+    await createMaterial(bot, 'Сбер1', '10000');
+    expect(bot.last.allTexts()).toContain('Сбер1');
+    expect(bot.last.allTexts()).not.toMatch(/просто прибыль|это прибыль|PROFIT/i);
+    const labels = (bot.last.lastKeyboard ?? []).map((row) => row.map((button) => button.text).join());
+    expect(labels.some((text) => text.includes('Обновить балансы'))).toBe(true);
+    expect(labels.some((text) => text.includes('Пополнить'))).toBe(true);
+    expect(labels.some((text) => text.includes('Расход'))).toBe(true);
+    expect(labels.some((text) => text.includes('Настройки'))).toBe(true);
+    expect(bot.last.allTexts()).not.toMatch(/карт/i);
+  });
+
+  it('UI-06 / UI-07: проход всех в работе; замороженные не в очереди; одна карта — тот же путь', async () => {
+    const bot = new TelegramProbe(db.pool(), '602');
+    const userId = await insertUser(db.pool(), '602');
+    await createMaterial(bot, 'Альфа', '1000');
+    await createMaterial(bot, 'Бета', '2000');
+    await createMaterial(bot, 'Гамма', '3000');
+    await bot.tapLabel('Расход');
+    await bot.tapLabel('Заблокировать');
+    await bot.tapLabel('Гамма');
+    await bot.tapLabel('Обновить балансы');
+    expect(bot.last.lastText).toContain('Альфа');
+    expect(bot.last.lastText).toContain('1 из 2');
+    expect(bot.last.lastText).not.toContain('Гамма');
+    await bot.send('1100');
+    expect(bot.last.lastText).toContain('Бета');
+    expect(bot.last.lastText).toContain('2 из 2');
+    await bot.send('/start');
+    const rows = await withUser(db.pool(), userId, async (client) => {
+      const result = await client.query<{ name: string; amount: string; source: string }>(
+        `SELECT c.name, b.amount::text AS amount, b.source
+         FROM v_current_balance_entries b
+         JOIN cards c ON c.id = b.card_id
+         WHERE b.user_id = $1 AND b.effective_date = '2024-08-20'`,
+        [userId],
+      );
+      return result.rows;
+    });
+    expect(rows.some((row) => row.name === 'Альфа' && row.amount === '1100.00')).toBe(true);
+    expect(rows.some((row) => row.name === 'Бета' && row.amount === '2000.00')).toBe(true);
+
+    await bot.send('/start');
+    await bot.tapLabel('Альфа');
+    expect(bot.last.lastText).toContain('Введите текущий баланс');
+    expect(bot.last.lastKeyboard?.flat().some((button) => button.text.includes('Пропустить'))).toBe(true);
+  });
+
+  it('UI-08: архивирование — ноль, вывод, перевод, потеря', async () => {
+    async function seed(telegramId: string, remainder: string) {
+      const bot = new TelegramProbe(db.pool(), telegramId);
+      await insertUser(db.pool(), telegramId);
+      await createMaterial(bot, 'Источник', remainder);
+      await createMaterial(bot, 'Получатель', '1000');
+      await bot.tapLabel('Настройки');
+      await bot.tapLabel('Удалить материал');
+      await bot.tapLabel('Источник');
+      await bot.tapLabel('Да');
+      return bot;
+    }
+
+    const zero = await seed('6080', '0');
+    expect(zero.last.allTexts()).toContain(COPY.archivedDone);
+
+    const withdrawn = await seed('6081', '20000');
+    expect(withdrawn.last.allTexts()).toContain('Что стало с этими деньгами');
+    await withdrawn.tapLabel('Вывел');
+    expect(withdrawn.last.allTexts()).toContain(COPY.archivedDone);
+
+    const lost = await seed('6082', '20000');
+    await lost.tapLabel('Потерял');
+    expect(lost.last.allTexts()).toContain(COPY.archivedDone);
+
+    const transferred = await seed('6083', '20000');
+    await transferred.tapLabel('Перевёл');
+    await transferred.tapLabel('Получатель');
+    expect(transferred.last.allTexts()).toContain(COPY.archivedDone);
+  });
+
+  it('UI-09: устаревший rev не меняет данные', async () => {
+    const bot = new TelegramProbe(db.pool(), '609');
+    const userId = await insertUser(db.pool(), '609');
+    await createMaterial(bot, 'Сбер', '5000');
+    const stale = encodeCallback('upd_all', null, 0);
+    await bot.tapLabel('Обновить балансы');
+    await bot.tap(stale);
+    expect(bot.last.allTexts()).toContain(COPY.stale);
+    const count = await withUser(db.pool(), userId, async (client) => {
+      const result = await client.query<{ n: string }>(
+        `SELECT count(*)::text AS n FROM balance_entries WHERE user_id = $1`,
+        [userId],
+      );
+      return result.rows[0]?.n;
+    });
+    expect(count).toBe('1');
+  });
+
+  it('UI-10: повторный update_id не создаёт вторую запись', async () => {
+    const bot = new TelegramProbe(db.pool(), '610');
+    const userId = await insertUser(db.pool(), '610');
+    await createMaterial(bot, 'Сбер', '1000');
+    await bot.tapLabel('Обновить балансы');
+    const firstId = bot.updateId;
+    await bot.send('1500', firstId);
+    await bot.send('9999', firstId);
+    const amounts = await withUser(db.pool(), userId, async (client) => {
+      const result = await client.query<{ amount: string }>(
+        `SELECT amount::text AS amount FROM v_current_balance_entries WHERE user_id = $1`,
+        [userId],
+      );
+      return result.rows.map((row) => row.amount);
+    });
+    expect(amounts).toEqual(['1500.00']);
+  });
+
+  it('UI-11 / UI-16: чужой card_id — «не найден», ноль изменений', async () => {
+    const owner = new TelegramProbe(db.pool(), '6111');
+    await insertUser(db.pool(), '6111');
+    await createMaterial(owner, 'Чужой', '8000');
+    const ownerBtn = findUpdOne(owner);
+    const parsed = parseCallbackData(ownerBtn);
+    if (!parsed.ok) {
+      throw new Error('expected callback');
+    }
+
+    const stranger = new TelegramProbe(db.pool(), '6112');
+    const strangerId = await insertUser(db.pool(), '6112');
+    await createMaterial(stranger, 'Свой', '100');
+    const rev = currentRev(stranger);
+    const forged = encodeCallback('upd_one', parsed.id, rev);
+    const before = await countBalances(db.pool(), strangerId);
+    await stranger.tap(forged);
+    expect(stranger.last.allTexts()).toContain(COPY.notFound);
+    expect(await countBalances(db.pool(), strangerId)).toBe(before);
+
+    const freezeForged = encodeCallback('freeze', parsed.id, rev);
+    await stranger.tap(freezeForged);
+    expect(stranger.last.allTexts()).toContain(COPY.notFound);
+  });
+
+  it('UI-12 через интерфейс: мусор не продвигает очередь', async () => {
+    const bot = new TelegramProbe(db.pool(), '612');
+    await insertUser(db.pool(), '612');
+    await createMaterial(bot, 'Альфа', '1000');
+    await createMaterial(bot, 'Бета', '2000');
+    await bot.tapLabel('Обновить балансы');
+    expect(bot.last.lastText).toContain('1 из 2');
+    await bot.send('10.999');
+    expect(bot.last.lastText).toContain('Копейки — не более двух знаков');
+    await bot.send('1100');
+    expect(bot.last.lastText).toContain('2 из 2');
+  });
+
+  it('UI-13: businessDate не меняется после полуночи (C-11)', async () => {
+    let now = new Date('2024-08-31T23:59:00+03:00');
+    const bot = new TelegramProbe(db.pool(), '613', () => now);
+    const userId = await insertUser(db.pool(), '613');
+    await createMaterial(bot, 'Сбер', '1000');
+    await bot.tapLabel('Обновить балансы');
+    now = new Date('2024-09-01T00:01:00+03:00');
+    await bot.send('1500');
+    const dates = await withUser(db.pool(), userId, async (client) => {
+      const result = await client.query<{ d: string; amount: string }>(
+        `SELECT effective_date::text AS d, amount::text AS amount
+         FROM v_current_balance_entries WHERE user_id = $1`,
+        [userId],
+      );
+      return result.rows;
+    });
+    expect(dates).toEqual([{ d: '2024-08-31', amount: '1500.00' }]);
+  });
+
+  it('UI-15: пополнение Y > текущего; Y ≤ не продвигает', async () => {
+    const bot = new TelegramProbe(db.pool(), '615');
+    const userId = await insertUser(db.pool(), '615');
+    await createMaterial(bot, 'Сбер1', '80000');
+    await bot.tapLabel('Пополнить');
+    await bot.tapLabel('Пополнить материал');
+    await bot.tapLabel('Сбер1');
+    await bot.send('80000');
+    expect(bot.last.lastText).toContain('больше текущего');
+    await bot.send('90000');
+    expect(bot.last.allTexts()).toContain('Пополнено');
+    expect(bot.last.allTexts()).toContain('Прибыль не изменилась');
+    const row = await withUser(db.pool(), userId, async (client) => {
+      const result = await client.query<{ amount: string; capital_in: string }>(
+        `SELECT amount::text, capital_in::text FROM v_current_balance_entries WHERE user_id = $1`,
+        [userId],
+      );
+      return result.rows[0];
+    });
+    expect(row?.amount).toBe('90000.00');
+    expect(row?.capital_in).toBe('90000.00');
+  });
+
+  it('UI-16: заморозка и разморозка; капитал на месте', async () => {
+    const bot = new TelegramProbe(db.pool(), '616');
+    await insertUser(db.pool(), '616');
+    await createMaterial(bot, 'Альфа', '318861');
+    await bot.tapLabel('Расход');
+    await bot.tapLabel('Заблокировать');
+    await bot.tapLabel('Альфа');
+    expect(bot.last.allTexts()).toContain('заморожен');
+    expect(bot.last.allTexts()).toContain(COPY.frozenHeader);
+    await bot.tapLabel('Альфа');
+    await bot.tapLabel('Вернуть в оборот');
+    expect(bot.last.allTexts()).toContain('в работе');
+  });
+
+  it('UI-17: трата уменьшает баланс и не архивирует', async () => {
+    const bot = new TelegramProbe(db.pool(), '617');
+    const userId = await insertUser(db.pool(), '617');
+    await createMaterial(bot, 'Сбер1', '80000');
+    await bot.tapLabel('Расход');
+    await bot.tapLabel('Потратил');
+    await bot.tapLabel('Сбер1');
+    await bot.send('80000');
+    expect(bot.last.lastText).toContain('меньше текущего');
+    await bot.send('70000');
+    expect(bot.last.allTexts()).toContain('Выведено');
+    const row = await withUser(db.pool(), userId, async (client) => {
+      const result = await client.query<{ amount: string; archived: string | null }>(
+        `SELECT b.amount::text AS amount, c.archived_on::text AS archived
+         FROM v_current_balance_entries b
+         JOIN cards c ON c.id = b.card_id
+         WHERE b.user_id = $1`,
+        [userId],
+      );
+      return result.rows[0];
+    });
+    expect(row?.amount).toBe('70000.00');
+    expect(row?.archived).toBeNull();
+  });
+});
+
+function findUpdOne(bot: TelegramProbe): string {
+  for (const message of bot.last.messages) {
+    for (const row of message.keyboard ?? []) {
+      for (const button of row) {
+        if (button.data.includes(':upd_one:')) {
+          return button.data;
+        }
+      }
+    }
+  }
+  throw new Error('upd_one button not found');
+}
+
+function currentRev(bot: TelegramProbe): number {
+  const first = bot.last.lastKeyboard?.[0]?.[0]?.data;
+  if (first === undefined) {
+    return 0;
+  }
+  const parsed = parseCallbackData(first);
+  return parsed.ok ? parsed.rev : 0;
+}
+
+async function countBalances(pool: import('pg').Pool, userId: string): Promise<number> {
+  return withUser(pool, userId, async (client) => {
+    const result = await client.query<{ n: string }>(
+      'SELECT count(*)::text AS n FROM balance_entries WHERE user_id = $1',
+      [userId],
+    );
+    return Number(result.rows[0]?.n ?? '0');
+  });
+}

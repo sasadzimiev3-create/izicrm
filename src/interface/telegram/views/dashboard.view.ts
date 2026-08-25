@@ -1,0 +1,141 @@
+import type { Dashboard, DashboardCard } from '../../../application/dto/dashboard.js';
+import { formatMoney, formatMoneyDelta, formatPercent } from '../../../domain/money/format.js';
+import type { PercentResult } from '../../../domain/money/percent.js';
+import { Money } from '../../../domain/money/money.js';
+import type { CardBalanceChange } from '../../../domain/finance/card-change.js';
+
+import { COPY } from './copy.js';
+import { formatDayMonth, formatDaysSuffix, formatMonthTitle } from './dates.js';
+
+const EM_DASH = '\u2014';
+const TELEGRAM_LIMIT = 4096;
+
+export function formatCardTitle(icon: string | null, name: string): string {
+  if (icon === null || icon === '') {
+    return name;
+  }
+  return `${icon} ${name}`;
+}
+
+export function formatPnlLine(amount: Money, percent: PercentResult): string {
+  if (!percent.defined) {
+    return `${formatMoneyDelta(amount)} (${EM_DASH})`;
+  }
+  return `${formatMoneyDelta(amount)} / ${formatPercent(percent)}`;
+}
+
+export function formatCardChange(change: CardBalanceChange): string {
+  if (!change.defined) {
+    return change.reason === 'NEW_CARD' ? COPY.newCard : EM_DASH;
+  }
+  return formatPnlLine(change.amount, change.percent);
+}
+
+function dailyTitle(dashboard: Dashboard): string {
+  const last = dashboard.lastUpdateDate;
+  if (last === null) {
+    return '';
+  }
+  const datePart = formatDayMonth(last);
+  const head =
+    last === dashboard.today
+      ? `${COPY.todayPrefix} · ${datePart}`
+      : `${COPY.lastUpdatePrefix} · ${datePart}`;
+  if (dashboard.daily.defined) {
+    return `${head}${formatDaysSuffix(dashboard.daily.periodDays)}`;
+  }
+  return head;
+}
+
+function dailyValue(dashboard: Dashboard): string {
+  if (!dashboard.daily.defined) {
+    return EM_DASH;
+  }
+  return formatPnlLine(dashboard.daily.amount, dashboard.daily.percent);
+}
+
+function renderCardBlock(card: DashboardCard): string {
+  const title = formatCardTitle(card.icon, card.name);
+  const change = formatCardChange(card.change);
+  return `${title}    ${formatMoney(card.balance)}\n${change}`;
+}
+
+function hasFrozen(dashboard: Dashboard): boolean {
+  return !dashboard.frozenCapital.isZero() || dashboard.frozenCards.length > 0;
+}
+
+/**
+ * Главный экран. Чистая функция, без арифметики.
+ *
+ * @see docs/telegram-flows.md §1
+ */
+export function renderDashboard(dashboard: Dashboard): string {
+  if (
+    dashboard.workingCards.length === 0 &&
+    dashboard.frozenCards.length === 0 &&
+    dashboard.totalCapital.isZero() &&
+    dashboard.lastUpdateDate === null
+  ) {
+    return COPY.emptyOnboarding;
+  }
+
+  const lines: string[] = [];
+  lines.push(`${COPY.workingHeader}    ${formatMoney(dashboard.workingCapital)}`);
+  if (hasFrozen(dashboard)) {
+    lines.push(`${COPY.frozenHeader}  ${formatMoney(dashboard.frozenCapital)}`);
+  }
+  lines.push(`${COPY.totalHeader}      ${formatMoney(dashboard.totalCapital)}`);
+  lines.push('');
+
+  const title = dailyTitle(dashboard);
+  if (title !== '') {
+    lines.push(`${title}        ${dailyValue(dashboard)}`);
+  }
+  lines.push(`${formatMonthTitle(dashboard.today)}         ${formatPnlLine(dashboard.monthly.amount, dashboard.monthly.percent)}`);
+  lines.push('');
+
+  if (dashboard.workingCards.length === 0 && dashboard.frozenCards.length === 0) {
+    lines.push(COPY.allArchived);
+    return lines.join('\n');
+  }
+
+  if (dashboard.workingCards.length > 0) {
+    lines.push(COPY.workingHeader);
+    lines.push('');
+    for (const card of dashboard.workingCards) {
+      lines.push(renderCardBlock(card));
+      lines.push('');
+    }
+  }
+
+  if (hasFrozen(dashboard)) {
+    lines.push(COPY.frozenHeader);
+    lines.push('');
+    for (const card of dashboard.frozenCards) {
+      lines.push(renderCardBlock(card));
+      lines.push('');
+    }
+  }
+
+  return lines.join('\n').trimEnd();
+}
+
+export function paginateText(text: string, limit = TELEGRAM_LIMIT): string[] {
+  if (text.length <= limit) {
+    return [text];
+  }
+  const pages: string[] = [];
+  let rest = text;
+  while (rest.length > limit) {
+    let cut = rest.lastIndexOf('\n', limit);
+    if (cut <= 0) {
+      cut = limit;
+    }
+    pages.push(rest.slice(0, cut));
+    rest = rest.slice(cut).replace(/^\n/, '');
+  }
+  if (rest.length > 0) {
+    pages.push(rest);
+  }
+  return pages;
+}

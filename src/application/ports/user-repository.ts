@@ -16,4 +16,5 @@ export type UserRecord = {
 export interface UserRepository {
   findOrCreateByTelegramId(telegramId: string, tx: DbTx): Promise<UserRecord>;
   getUserByTelegramId(telegramId: string, tx: DbTx): Promise<UserRecord | null>;
+  markUserBlocked(telegramId: string, tx: DbTx): Promise<void>;
 }

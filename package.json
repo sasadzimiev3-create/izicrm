@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "node --env-file-if-exists=.env --import tsx src/main.ts",
     "test": "vitest run --coverage",
-    "test:int": "vitest run --config vitest.db.config.ts tests/integration",
+    "test:int": "vitest run --config vitest.db.config.ts tests/integration tests/e2e",
     "test:security": "vitest run --config vitest.db.config.ts tests/security",
     "migrate:up": "node --env-file-if-exists=.env ./node_modules/node-pg-migrate/bin/node-pg-migrate.js up --database-url-var DATABASE_MIGRATOR_URL",
     "migrate:down": "node --env-file-if-exists=.env ./node_modules/node-pg-migrate/bin/node-pg-migrate.js down 20 --database-url-var DATABASE_MIGRATOR_URL",

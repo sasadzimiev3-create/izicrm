@@ -26,4 +26,12 @@ export class PgUserRepository implements UserRepository {
       .executeTakeFirstOrThrow();
     return toUserRecord(row);
   }
+
+  async markUserBlocked(telegramId: string, tx: DbTx): Promise<void> {
+    await kyselyTx(tx)
+      .updateTable('users')
+      .set({ blocked_at: new Date() })
+      .where('telegram_id', '=', telegramId)
+      .execute();
+  }
 }
