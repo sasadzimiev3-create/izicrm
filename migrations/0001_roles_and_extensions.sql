@@ -49,9 +49,18 @@ EXCEPTION
   WHEN undefined_object THEN NULL;
 END $$;
 
-ALTER ROLE IF EXISTS izicrm_app RESET search_path;
-ALTER ROLE IF EXISTS izicrm_migrator RESET search_path;
-ALTER ROLE IF EXISTS izicrm_maintenance RESET search_path;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'izicrm_app') THEN
+    ALTER ROLE izicrm_app RESET search_path;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'izicrm_migrator') THEN
+    ALTER ROLE izicrm_migrator RESET search_path;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'izicrm_maintenance') THEN
+    ALTER ROLE izicrm_maintenance RESET search_path;
+  END IF;
+END $$;
 
 DROP OWNED BY izicrm_app;
 DROP OWNED BY izicrm_maintenance;

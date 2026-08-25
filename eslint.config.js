@@ -84,6 +84,22 @@ export default tseslint.config(
     },
   },
   {
+    files: ['src/infrastructure/repositories/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '../db/pool.js',
+              message: 'репозитории получают tx из UnitOfWork, не пул',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['src/application/**/*.ts'],
     rules: {
       'no-restricted-imports': [

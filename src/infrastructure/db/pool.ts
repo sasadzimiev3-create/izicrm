@@ -12,12 +12,17 @@ export type AppRoleSafetyRow = {
 /**
  * Пул приложения. Type parser-ы настраиваются здесь, один раз на процесс.
  */
-export function createPool(connectionString: string): pg.Pool {
+export function createPool(
+  connectionString: string,
+  config: Omit<pg.PoolConfig, 'connectionString'> = {},
+): pg.Pool {
   configurePgTypes();
   assertNumericParserIsIdentity();
+  const { options, ...rest } = config;
   return new pg.Pool({
+    ...rest,
     connectionString,
-    options: '-c search_path=public',
+    options: options ?? '-c search_path=public',
   });
 }
 
