@@ -129,6 +129,20 @@ export class PgCardRepository implements CardRepository {
     }
   }
 
+  async setUserCardIcon(
+    userId: UserId,
+    cardId: CardId,
+    icon: string | null,
+    tx: DbTx,
+  ): Promise<void> {
+    await kyselyTx(tx)
+      .updateTable('cards')
+      .set({ icon })
+      .where('user_id', '=', userIdParam(userId))
+      .where('id', '=', cardIdParam(cardId))
+      .execute();
+  }
+
   async freezeUserCard(
     userId: UserId,
     cardId: CardId,

@@ -29,6 +29,7 @@ export interface CardRepository {
   findActiveByNormalizedName(userId: UserId, nameNorm: string, tx: DbTx): Promise<CardRow | null>;
   insertUserCard(userId: UserId, input: InsertCardInput, tx: DbTx): Promise<CardRow>;
   renameUserCard(userId: UserId, cardId: CardId, name: string, tx: DbTx): Promise<void>;
+  setUserCardIcon(userId: UserId, cardId: CardId, icon: string | null, tx: DbTx): Promise<void>;
   freezeUserCard(userId: UserId, cardId: CardId, frozenOn: BusinessDate, tx: DbTx): Promise<void>;
   unfreezeUserCard(userId: UserId, cardId: CardId, tx: DbTx): Promise<void>;
   archiveUserCard(
