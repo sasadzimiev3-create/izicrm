@@ -10,6 +10,8 @@ function portNumber(value: string): number {
 
 const envSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().optional(),
+  /** HTTP/SOCKS5 до api.telegram.org, если прямого доступа нет. Пример: http://user:pass@host:8000 */
+  TELEGRAM_PROXY_URL: z.string().optional(),
   DATABASE_URL: z.string().min(1),
   DATABASE_MIGRATOR_URL: z.string().min(1),
   DATABASE_MAINTENANCE_URL: z.string().min(1),

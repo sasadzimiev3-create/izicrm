@@ -23,7 +23,7 @@ async function main(): Promise<void> {
   const gate = createInFlightGate();
   const access = createDataAccess(pool);
   const deps = createTelegramDeps({ ...access, uow: trackUnitOfWork(access.uow, gate) });
-  const bot = createTelegramBot(token);
+  const bot = createTelegramBot(token, { proxyUrl: env.TELEGRAM_PROXY_URL });
   bot.use(async (_ctx, next) => {
     if (!gate.isAccepting()) {
       return;
@@ -45,6 +45,8 @@ async function main(): Promise<void> {
   );
 
   bindStopSignals(bot, gate);
+  const me = await bot.api.getMe();
+  console.error(`telegram polling as @${me.username}`);
   await bot.start();
   await finalizeRuntime({ bot, pool, health, gate });
 }

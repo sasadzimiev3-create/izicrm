@@ -54,6 +54,7 @@ services:
         condition: service_completed_successfully
     environment:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_PROXY_URL: ${TELEGRAM_PROXY_URL:-}
       DATABASE_URL: postgres://izicrm_app:${IZICRM_APP_PASSWORD}@postgres:5432/izicrm
       DATABASE_MIGRATOR_URL: postgres://izicrm_migrator:${IZICRM_MIGRATOR_PASSWORD}@postgres:5432/izicrm
       DATABASE_MAINTENANCE_URL: postgres://izicrm_maintenance:${IZICRM_MAINTENANCE_PASSWORD}@postgres:5432/izicrm
