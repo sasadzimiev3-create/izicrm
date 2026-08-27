@@ -88,6 +88,8 @@ export function reduce(state: DialogState, event: DialogEvent): ReduceResult {
       return reduceFreezeSelect(state, event);
     case 'SpendSelect':
       return reduceSpendSelect(state, event);
+    case 'UnfreezeSelect':
+      return reduceUnfreezeSelect(state, event);
     case 'SpendAmount':
       return reduceSpendAmount(state, event);
     case 'FrozenCardMenu':
@@ -130,6 +132,8 @@ function reduceIdle(event: DialogEvent): ReduceResult {
       return result(IDLE, { t: 'ApplyFreeze', cardId: event.cardId });
     case 'SpendPick':
       return result({ t: 'SpendSelect' }, { t: 'ShowSpendList' });
+    case 'UnfreezePick':
+      return result({ t: 'UnfreezeSelect' }, { t: 'ShowUnfreezeList' });
     case 'SpendCard':
       return result(
         { t: 'SpendAmount', cardId: event.cardId, businessDate: event.businessDate },
@@ -263,6 +267,9 @@ function reduceTopUpSelect(state: DialogState, event: DialogEvent): ReduceResult
       { t: 'PromptTopUp' },
     );
   }
+  if (event.t === 'TopUpMenu') {
+    return result(IDLE, { t: 'ShowTopUpMenu' });
+  }
   if (event.t === 'Home') {
     return home();
   }
@@ -289,6 +296,9 @@ function reduceFreezeSelect(state: DialogState, event: DialogEvent): ReduceResul
   if (event.t === 'FreezeCard') {
     return result(IDLE, { t: 'ApplyFreeze', cardId: event.cardId });
   }
+  if (event.t === 'ExpenseMenu') {
+    return result(IDLE, { t: 'ShowExpenseMenu' });
+  }
   return stay(state, { t: 'Ignore' });
 }
 
@@ -298,6 +308,19 @@ function reduceSpendSelect(state: DialogState, event: DialogEvent): ReduceResult
       { t: 'SpendAmount', cardId: event.cardId, businessDate: event.businessDate },
       { t: 'PromptSpend' },
     );
+  }
+  if (event.t === 'ExpenseMenu') {
+    return result(IDLE, { t: 'ShowExpenseMenu' });
+  }
+  return stay(state, { t: 'Ignore' });
+}
+
+function reduceUnfreezeSelect(state: DialogState, event: DialogEvent): ReduceResult {
+  if (event.t === 'FrozenMenu') {
+    return result({ t: 'FrozenCardMenu', cardId: event.cardId }, { t: 'ShowFrozenMenu', cardId: event.cardId });
+  }
+  if (event.t === 'ExpenseMenu') {
+    return result(IDLE, { t: 'ShowExpenseMenu' });
   }
   return stay(state, { t: 'Ignore' });
 }

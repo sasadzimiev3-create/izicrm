@@ -15,6 +15,7 @@ export type CallbackAction =
   | 'spend_pick'
   | 'spend_card'
   | 'frozen'
+  | 'unfreeze_pick'
   | 'unfreeze'
   | 'upd_all'
   | 'upd_one'
@@ -49,6 +50,7 @@ const ACTIONS = new Set<string>([
   'spend_pick',
   'spend_card',
   'frozen',
+  'unfreeze_pick',
   'unfreeze',
   'upd_all',
   'upd_one',

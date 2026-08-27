@@ -33,6 +33,8 @@ export const COPY = {
   freezePick: 'Заблокировать материал',
   spendPick: 'Потратил / вывел',
   freezeWhich: 'Какой материал заблокировать?',
+  unfreezeWhich: 'Какой материал вернуть в оборот?',
+  noFrozen: 'Нет замороженных материалов',
   freezeDone: (name: string) =>
     `${name} заморожен. Во «Всего» он остался, прибыль не изменилась.`,
   unfreezeDone: (name: string) =>

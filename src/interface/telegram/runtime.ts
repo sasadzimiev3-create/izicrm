@@ -402,6 +402,8 @@ async function classifyCallback(
       return { t: 'FreezePick' };
     case 'spend_pick':
       return { t: 'SpendPick' };
+    case 'unfreeze_pick':
+      return { t: 'UnfreezePick' };
     case 'upd_all': {
       const queue = await deps.services.balanceUpdate.listWorkingQueue(user.id, today);
       return { t: 'UpdateAll', queue: queue.map((row) => row.id), businessDate: today };
@@ -616,6 +618,7 @@ async function runEffect(
     case 'ShowTopUpList':
     case 'ShowFreezeList':
     case 'ShowSpendList':
+    case 'ShowUnfreezeList':
     case 'ShowRenameList':
     case 'ShowIconList':
     case 'ShowArchiveList':
@@ -819,6 +822,29 @@ async function sendPicker(
       cardPickerKeyboard(
         rows.map((row) => toPicker(row, amounts.get(row.id))),
         'spend_card',
+        rev,
+        { back: 'expense' },
+      ),
+    );
+    return;
+  }
+  if (kind === 'ShowUnfreezeList') {
+    const rows = dashboard.frozenCards;
+    if (rows.length === 0) {
+      await send(sender, COPY.noFrozen, cardPickerKeyboard([], 'frozen', rev, { back: 'expense' }));
+      return;
+    }
+    await send(
+      sender,
+      COPY.unfreezeWhich,
+      cardPickerKeyboard(
+        rows.map((card) => ({
+          id: card.id,
+          name: card.name,
+          icon: card.icon,
+          balance: card.balance,
+        })),
+        'frozen',
         rev,
         { back: 'expense' },
       ),

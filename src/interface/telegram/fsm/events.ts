@@ -31,6 +31,7 @@ export type DialogEvent =
   | { t: 'FreezeCard'; cardId: CardId }
   | { t: 'SpendPick' }
   | { t: 'SpendCard'; cardId: CardId; businessDate: BusinessDate }
+  | { t: 'UnfreezePick' }
   | { t: 'FrozenMenu'; cardId: CardId }
   | { t: 'Unfreeze'; cardId: CardId }
   | { t: 'UpdateAll'; queue: CardId[]; businessDate: BusinessDate }

@@ -39,8 +39,7 @@ export function mainKeyboard(
   }
   const rows: Keyboard = [
     [btn('🔄 Обновить балансы', 'upd_all', null, rev)],
-    [btn('➕ Пополнить', 'topup', null, rev)],
-    [btn('❄️ Расход', 'expense', null, rev)],
+    [btn('➕ Пополнить', 'topup', null, rev), btn('❄️ Расход', 'expense', null, rev)],
     [btn('⚙️ Настройки', 'settings', null, rev)],
   ];
   const nav: KeyboardButton[] = [];
@@ -76,6 +75,7 @@ export function expenseMenuKeyboard(rev: number): Keyboard {
   return [
     [btn(`❄️ ${COPY.freezePick}`, 'freeze_pick', null, rev)],
     [btn(`💸 ${COPY.spendPick}`, 'spend_pick', null, rev)],
+    [btn(`♻️ ${COPY.returnToWork}`, 'unfreeze_pick', null, rev)],
     backRow(rev),
   ];
 }
@@ -153,21 +153,7 @@ export function dashboardKeyboard(
   cards: { working: PickerCard[]; frozen: PickerCard[] },
 ): Keyboard {
   const empty = cards.working.length === 0 && cards.frozen.length === 0;
-  const rows = mainKeyboard(rev, { empty });
-  if (empty) {
-    return rows;
-  }
-  for (const card of cards.working) {
-    rows.push([
-      btn(truncate(formatCardTitle(card.icon, card.name)), 'upd_one', card.id, rev),
-    ]);
-  }
-  for (const card of cards.frozen) {
-    rows.push([
-      btn(truncate(formatCardTitle(card.icon, card.name)), 'frozen', card.id, rev),
-    ]);
-  }
-  return rows;
+  return mainKeyboard(rev, { empty });
 }
 
 export function toInlineMarkup(keyboard: Keyboard): {

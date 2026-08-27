@@ -29,6 +29,7 @@ export type DialogState =
   | { t: 'TopUpAmount'; cardId: CardId; businessDate: BusinessDate }
   | { t: 'FreezeSelect' }
   | { t: 'SpendSelect' }
+  | { t: 'UnfreezeSelect' }
   | { t: 'SpendAmount'; cardId: CardId; businessDate: BusinessDate }
   | { t: 'FrozenCardMenu'; cardId: CardId }
   | {
@@ -66,6 +67,7 @@ export const dialogStateSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('TopUpAmount'), cardId: cardIdSchema, businessDate: businessDateSchema }),
   z.object({ t: z.literal('FreezeSelect') }),
   z.object({ t: z.literal('SpendSelect') }),
+  z.object({ t: z.literal('UnfreezeSelect') }),
   z.object({ t: z.literal('SpendAmount'), cardId: cardIdSchema, businessDate: businessDateSchema }),
   z.object({ t: z.literal('FrozenCardMenu'), cardId: cardIdSchema }),
   z.object({
@@ -113,6 +115,7 @@ export function parseDialogState(raw: unknown): DialogState {
     case 'TopUpSelect':
     case 'FreezeSelect':
     case 'SpendSelect':
+    case 'UnfreezeSelect':
     case 'ReportBuilding':
       return { t: state.t };
     case 'CardCreateBalance':
@@ -169,6 +172,7 @@ export function serializeDialogState(state: DialogState): Record<string, unknown
     case 'TopUpSelect':
     case 'FreezeSelect':
     case 'SpendSelect':
+    case 'UnfreezeSelect':
     case 'ReportBuilding':
       return { t: state.t };
     case 'CardCreateBalance':

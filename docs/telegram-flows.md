@@ -33,8 +33,7 @@ Handlers не содержат бизнес-логики (FR-6.3). Все мно
                  [+127 ₽ / +0.04%]
 
 [🔄 Обновить балансы]
-[➕ Пополнить]
-[❄️ Расход]
+[➕ Пополнить]  [❄️ Расход]
 [⚙️ Настройки]
 ```
 
@@ -80,10 +79,11 @@ Handlers не содержат бизнес-логики (FR-6.3). Все мно
 | Нет предыдущего дня | `—` вместо P&L и процента (FR-5.6) |
 | База процента ≤ 0 | `+30 000 ₽ (—)` (C-2) |
 | Нет материалов | Онбординг: `Пока нет ни одного материала` + `[➕ Пополнить]` |
+| Материалы в тексте | Список в сообщении; кнопок материалов на главном нет |
 | Все материалы архивированы | `0 ₽`, P&L `—` |
 | Все в работе заморожены | Всего > 0, «в работе» = `0 ₽`, графа работы пуста |
 | Материал создан после `prev` | `новый` вместо изменения (§5.6 модели) |
-| Материал заморожен | строка в графе «Заморожено»; тап открывает карточку с разморозкой |
+| Материал заморожен | строка в графе «Заморожено»; разморозка — Расход → Вернуть в оборот |
 
 ### 1.4. Словарь интерфейса
 
@@ -145,10 +145,12 @@ type DialogState =
   | { t: 'CardCreateBalance';   name: string }
   | { t: 'CardCreateIcon';      name: string; amount: string }
   | { t: 'CardRenameName';      cardId: CardId }
+  | { t: 'CardSetIcon';         cardId: CardId }
   | { t: 'TopUpSelect' }
   | { t: 'TopUpAmount';         cardId: CardId; businessDate: BusinessDate }
   | { t: 'FreezeSelect' }
   | { t: 'SpendSelect' }
+  | { t: 'UnfreezeSelect' }
   | { t: 'SpendAmount';         cardId: CardId; businessDate: BusinessDate }
   | { t: 'FrozenCardMenu';      cardId: CardId }
   | { t: 'BalanceUpdateAmount'; queue: CardId[]; index: number;
@@ -193,13 +195,19 @@ type DialogState =
 | `CardCreateIcon` | `cb:skip` | `Idle` | Создать карту с `icon = NULL` |
 | `CardCreateIcon` | `cb:icon:<n>`, `n` вне белого списка | `CardCreateIcon` | Игнорировать: `callback_data` недоверенный |
 | `Idle` | `cb:topup_pick` | `TopUpSelect` | Список материалов в обороте |
+| `TopUpSelect` | `cb:topup` | `Idle` | Вернуться в меню пополнения |
 | `TopUpSelect` | `cb:topup_card:<id>` | `TopUpAmount` | Guard: в работе; запросить новый баланс |
 | `TopUpAmount` | текст, `Y >` текущего | `Idle` | Пополнить: `amount = Y`, `capital_in += Y − текущий` |
 | `TopUpAmount` | текст, невалиден или `Y ≤` текущего | `TopUpAmount` | Правила ввода; состояние не меняется |
-| `Idle` | `cb:expense` | `Idle` | Меню расхода: заблокировать / потратил |
+| `Idle` | `cb:expense` | `Idle` | Меню расхода: заблокировать / потратил / вернуть в оборот |
 | `Idle` | `cb:freeze_pick` | `FreezeSelect` | Список материалов в работе |
+| `FreezeSelect` | `cb:expense` | `Idle` | Вернуться в меню расхода |
 | `FreezeSelect` | `cb:freeze:<id>` | `Idle` | Заморозить; P&L = 0 |
+| `Idle` | `cb:unfreeze_pick` | `UnfreezeSelect` | Список замороженных |
+| `UnfreezeSelect` | `cb:expense` | `Idle` | Вернуться в меню расхода |
+| `UnfreezeSelect` | `cb:frozen:<id>` | `FrozenCardMenu` | Карточка замороженного |
 | `Idle` | `cb:spend_pick` | `SpendSelect` | Список в работе и замороженных |
+| `SpendSelect` | `cb:expense` | `Idle` | Вернуться в меню расхода |
 | `SpendSelect` | `cb:spend_card:<id>` | `SpendAmount` | Запросить новый баланс |
 | `SpendAmount` | текст, `Y <` текущего | `Idle` | Трата: `amount = Y`, `capital_out += текущий − Y` |
 | `SpendAmount` | текст, невалиден или `Y ≥` текущего | `SpendAmount` | Правила ввода; состояние не меняется |
@@ -290,6 +298,7 @@ Guard-и — единственное место, где проверяется 
 
 [❄️ Заблокировать материал]
 [💸 Потратил / вывел]
+[♻️ Вернуть в оборот]
 [◀️ Назад]
 ```
 
@@ -322,7 +331,7 @@ Guard-и — единственное место, где проверяется 
 
 Если ввести 80 000 или больше — ошибка. Карта не удаляется, даже при нуле.
 
-Карточка замороженного (тап по строке):
+Карточка замороженного (Расход → Вернуть в оборот → материал):
 
 ```
 🔴 Альфа 7131* · 318 861 ₽

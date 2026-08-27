@@ -27,6 +27,26 @@ describe('FSM reduce — без Telegram', () => {
     expect(JSON.stringify(reduce(state, { t: 'IconSkip' }))).not.toMatch(/PROFIT|CardCreateKind/);
   });
 
+  it('разморозка из меню расхода открывает список', () => {
+    const result = reduce(IDLE, { t: 'UnfreezePick' });
+    expect(result.next).toEqual({ t: 'UnfreezeSelect' });
+    expect(result.effects).toEqual([{ t: 'ShowUnfreezeList' }]);
+  });
+
+  it('Назад из списков выбора материала возвращает в меню', () => {
+    const unfreeze = reduce({ t: 'UnfreezeSelect' }, { t: 'ExpenseMenu' });
+    const freeze = reduce({ t: 'FreezeSelect' }, { t: 'ExpenseMenu' });
+    const spend = reduce({ t: 'SpendSelect' }, { t: 'ExpenseMenu' });
+    const topup = reduce({ t: 'TopUpSelect' }, { t: 'TopUpMenu' });
+    const frozenHome = reduce({ t: 'FrozenCardMenu', cardId: C(1) }, { t: 'Home' });
+    expect(unfreeze).toEqual({ next: IDLE, effects: [{ t: 'ShowExpenseMenu' }] });
+    expect(freeze).toEqual({ next: IDLE, effects: [{ t: 'ShowExpenseMenu' }] });
+    expect(spend).toEqual({ next: IDLE, effects: [{ t: 'ShowExpenseMenu' }] });
+    expect(topup).toEqual({ next: IDLE, effects: [{ t: 'ShowTopUpMenu' }] });
+    expect(frozenHome.next).toEqual(IDLE);
+    expect(frozenHome.effects).toEqual([{ t: 'ShowHome' }]);
+  });
+
   it('дубль названия не продвигает состояние', () => {
     const state = { t: 'CardCreateName' as const };
     const result = reduce(state, { t: 'NameDuplicate' });

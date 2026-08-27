@@ -28,6 +28,7 @@ export type Effect =
   | { t: 'ShowFreezeList' }
   | { t: 'ApplyFreeze'; cardId: CardId }
   | { t: 'ShowSpendList' }
+  | { t: 'ShowUnfreezeList' }
   | { t: 'PromptSpend' }
   | { t: 'ApplySpend'; cardId: CardId; amount: string; businessDate: BusinessDate }
   | { t: 'ShowFrozenMenu'; cardId: CardId }

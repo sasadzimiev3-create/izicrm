@@ -30,6 +30,16 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     expect(labels.some((text) => text.includes('Пополнить'))).toBe(true);
     expect(labels.some((text) => text.includes('Расход'))).toBe(true);
     expect(labels.some((text) => text.includes('Настройки'))).toBe(true);
+    expect(
+      (bot.last.lastKeyboard ?? []).some(
+        (row) =>
+          row.some((button) => button.text.includes('Пополнить')) &&
+          row.some((button) => button.text.includes('Расход')),
+      ),
+    ).toBe(true);
+    expect((bot.last.lastKeyboard ?? []).flat().some((button) => button.text.includes('Сбер1'))).toBe(
+      false,
+    );
     expect(bot.last.allTexts()).not.toMatch(/карт/i);
   });
 
@@ -64,7 +74,7 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     expect(rows.some((row) => row.name === 'Бета' && row.amount === '2000.00')).toBe(true);
 
     await bot.send('/start');
-    await bot.tapLabel('Альфа');
+    await bot.tapLabel('Обновить балансы');
     expect(bot.last.lastText).toContain('Введите текущий баланс');
     expect(bot.last.lastKeyboard?.flat().some((button) => button.text.includes('Пропустить'))).toBe(true);
   });
@@ -138,25 +148,21 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
 
   it('UI-11 / UI-16: чужой card_id — «не найден», ноль изменений', async () => {
     const owner = new TelegramProbe(db.pool(), '6111');
-    await insertUser(db.pool(), '6111');
+    const ownerId = await insertUser(db.pool(), '6111');
     await createMaterial(owner, 'Чужой', '8000');
-    const ownerBtn = findUpdOne(owner);
-    const parsed = parseCallbackData(ownerBtn);
-    if (!parsed.ok) {
-      throw new Error('expected callback');
-    }
+    const ownerCardId = await firstCardId(db.pool(), ownerId);
 
     const stranger = new TelegramProbe(db.pool(), '6112');
     const strangerId = await insertUser(db.pool(), '6112');
     await createMaterial(stranger, 'Свой', '100');
     const rev = currentRev(stranger);
-    const forged = encodeCallback('upd_one', parsed.id, rev);
+    const forged = encodeCallback('upd_one', ownerCardId, rev);
     const before = await countBalances(db.pool(), strangerId);
     await stranger.tap(forged);
     expect(stranger.last.allTexts()).toContain(COPY.notFound);
     expect(await countBalances(db.pool(), strangerId)).toBe(before);
 
-    const freezeForged = encodeCallback('freeze', parsed.id, rev);
+    const freezeForged = encodeCallback('freeze', ownerCardId, rev);
     await stranger.tap(freezeForged);
     expect(stranger.last.allTexts()).toContain(COPY.notFound);
   });
@@ -225,6 +231,8 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     await bot.tapLabel('Альфа');
     expect(bot.last.allTexts()).toContain('заморожен');
     expect(bot.last.allTexts()).toContain(COPY.frozenHeader);
+    await bot.tapLabel('Расход');
+    await bot.tapLabel('Вернуть в оборот');
     await bot.tapLabel('Альфа');
     await bot.tapLabel('Вернуть в оборот');
     expect(bot.last.allTexts()).toContain('в работе');
@@ -254,19 +262,44 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     expect(row?.amount).toBe('70000.00');
     expect(row?.archived).toBeNull();
   });
+
+  it('Назад из списков расхода и пополнения возвращает в меню', async () => {
+    const bot = new TelegramProbe(db.pool(), '618');
+    await insertUser(db.pool(), '618');
+    await createMaterial(bot, 'Альфа', '1000');
+
+    await bot.tapLabel('Расход');
+    await bot.tapLabel('Заблокировать');
+    expect(bot.last.lastText).toContain(COPY.freezeWhich);
+    await bot.tapLabel('Назад');
+    expect(bot.last.lastText).toBe(COPY.expenseMenu);
+
+    await bot.tapLabel('Вернуть в оборот');
+    expect(bot.last.lastText).toBe(COPY.noFrozen);
+    await bot.tapLabel('Назад');
+    expect(bot.last.lastText).toBe(COPY.expenseMenu);
+
+    await bot.send('/start');
+    await bot.tapLabel('Пополнить');
+    await bot.tapLabel('Пополнить материал');
+    expect(bot.last.lastText).toContain(COPY.pickMaterial);
+    await bot.tapLabel('Назад');
+    expect(bot.last.lastText).toBe(COPY.topUpMenu);
+  });
 });
 
-function findUpdOne(bot: TelegramProbe): string {
-  for (const message of bot.last.messages) {
-    for (const row of message.keyboard ?? []) {
-      for (const button of row) {
-        if (button.data.includes(':upd_one:')) {
-          return button.data;
-        }
-      }
+function firstCardId(pool: import('pg').Pool, userId: string): Promise<string> {
+  return withUser(pool, userId, async (client) => {
+    const result = await client.query<{ id: string }>(
+      'SELECT id::text AS id FROM cards WHERE user_id = $1 ORDER BY id LIMIT 1',
+      [userId],
+    );
+    const id = result.rows[0]?.id;
+    if (id === undefined) {
+      throw new Error('card id not found');
     }
-  }
-  throw new Error('upd_one button not found');
+    return id;
+  });
 }
 
 function currentRev(bot: TelegramProbe): number {
