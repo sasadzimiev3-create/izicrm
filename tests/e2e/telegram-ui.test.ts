@@ -13,7 +13,6 @@ async function createMaterial(bot: TelegramProbe, name: string, amount: string):
   await bot.tapLabel('Добавить материал');
   await bot.send(name);
   await bot.send(amount);
-  await bot.tapLabel('Без стикера');
 }
 
 describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
@@ -30,6 +29,12 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     expect(labels.some((text) => text.includes('Пополнить'))).toBe(true);
     expect(labels.some((text) => text.includes('Расход'))).toBe(true);
     expect(labels.some((text) => text.includes('Настройки'))).toBe(true);
+    const topUp = (bot.last.lastKeyboard ?? []).flat().find((button) => button.text === 'Пополнить');
+    const spend = (bot.last.lastKeyboard ?? []).flat().find((button) => button.text === 'Расход');
+    expect(topUp?.style).toBe('success');
+    expect(spend?.style).toBe('danger');
+    expect(topUp?.text).toBe('Пополнить');
+    expect(spend?.text).toBe('Расход');
     expect(
       (bot.last.lastKeyboard ?? []).some(
         (row) =>
@@ -285,6 +290,56 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     expect(bot.last.lastText).toContain(COPY.pickMaterial);
     await bot.tapLabel('Назад');
     expect(bot.last.lastText).toBe(COPY.topUpMenu);
+  });
+
+  it('нет выбора стикера и переименования; банк определяется по названию', async () => {
+    const bot = new TelegramProbe(db.pool(), '619');
+    await insertUser(db.pool(), '619');
+    await createMaterial(bot, 'Втб2312', '10000');
+    expect(bot.last.allTexts()).toContain('🔵 Втб2312');
+    expect(bot.last.allTexts()).not.toContain('Выберите стикер');
+    expect(bot.last.allTexts()).not.toContain('Без стикера');
+    await bot.tapLabel('Настройки');
+    const settings = (bot.last.lastKeyboard ?? []).flat().map((button) => button.text).join('\n');
+    expect(settings).not.toContain('Переименовать');
+    expect(settings).not.toContain('стикер');
+    expect(settings).toContain('Отчёт в Excel');
+  });
+
+  it('обновление баланса вверх и вниз меняет прибыль, не депозит', async () => {
+    const bot = new TelegramProbe(db.pool(), '620');
+    const userId = await insertUser(db.pool(), '620');
+    await createMaterial(bot, 'Сбер1', '10000');
+    expect(bot.last.allTexts()).not.toContain(COPY.totalHeader);
+
+    await bot.tapLabel('Обновить балансы');
+    await bot.send('15000');
+    expect(bot.last.allTexts()).toContain(`+5${'\u202F'}000 ₽`);
+
+    const afterUp = await withUser(db.pool(), userId, async (client) => {
+      const result = await client.query<{ amount: string; capital_in: string }>(
+        `SELECT amount::text, capital_in::text FROM v_current_balance_entries WHERE user_id = $1`,
+        [userId],
+      );
+      return result.rows[0];
+    });
+    expect(afterUp?.amount).toBe('15000.00');
+    expect(afterUp?.capital_in).toBe('10000.00');
+
+    await bot.send('/start');
+    await bot.tapLabel('Обновить балансы');
+    await bot.send('12000');
+    expect(bot.last.allTexts()).toContain(`+2${'\u202F'}000 ₽`);
+
+    const afterDown = await withUser(db.pool(), userId, async (client) => {
+      const result = await client.query<{ amount: string; capital_in: string }>(
+        `SELECT amount::text, capital_in::text FROM v_current_balance_entries WHERE user_id = $1`,
+        [userId],
+      );
+      return result.rows[0];
+    });
+    expect(afterDown?.amount).toBe('12000.00');
+    expect(afterDown?.capital_in).toBe('10000.00');
   });
 });
 

@@ -1,7 +1,5 @@
 import type { CardId, UserId } from '../../domain/cards/card.js';
 import type { LocfBalance } from '../ports/balance-repository.js';
-import type { Card } from '../../domain/cards/card.js';
-import { ValidationError } from '../../domain/errors.js';
 import { isWorking } from '../../domain/finance/card-scope.js';
 import type { BusinessDate } from '../../domain/finance/period.js';
 import { Money } from '../../domain/money/money.js';
@@ -19,23 +17,16 @@ import {
 
 /**
  * Потоки при обновлении баланса (C-26, П-8).
- * Первый ввод за дату — 0/0. Исправление в день создания правит депозит.
- * Исправление в другой день сохраняет уже записанные потоки.
+ * Первый ввод за дату — 0/0. Разница нового и предыдущего баланса — P&L:
+ * депозит создания не переписывается. Исправление в тот же день сохраняет
+ * уже записанные потоки (пополнение/трата).
  */
 export function flowsForDailyUpdate(
-  card: Card,
   locf: LocfBalance,
-  newAmount: Money,
   date: BusinessDate,
 ): { capitalIn: Money; capitalOut: Money; source: BalanceEntrySource } {
   if (locf.effectiveDate !== date) {
     return { capitalIn: Money.zero(), capitalOut: Money.zero(), source: 'DAILY_UPDATE' };
-  }
-  if (card.createdOn === date && locf.capitalOut.isZero()) {
-    if (newAmount.isNegative()) {
-      throw new ValidationError('Некорректная сумма');
-    }
-    return { capitalIn: newAmount, capitalOut: Money.zero(), source: 'CORRECTION' };
   }
   return { capitalIn: locf.capitalIn, capitalOut: locf.capitalOut, source: 'CORRECTION' };
 }
@@ -59,7 +50,7 @@ export class BalanceUpdateService {
   async update(userId: UserId, command: UpdateBalanceCommand): Promise<Applied<void>> {
     return this.deps.uow.withUser(userId, (tx) =>
       once(this.deps.processed, userId, command.idempotencyKey, tx, async () => {
-        const card = await requireActiveCard(
+        await requireActiveCard(
           this.deps.cards,
           userId,
           command.cardId,
@@ -73,7 +64,7 @@ export class BalanceUpdateService {
           command.businessDate,
           tx,
         );
-        const flows = flowsForDailyUpdate(card, locf, command.amount, command.businessDate);
+        const flows = flowsForDailyUpdate(locf, command.businessDate);
         await this.deps.balances.insertSuperseding(
           userId,
           {

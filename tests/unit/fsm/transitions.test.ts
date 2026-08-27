@@ -15,16 +15,10 @@ describe('FSM reduce — без Telegram', () => {
     expect(state.t).toBe('CardCreateName');
     state = reduce(state, { t: 'NameEntered', name: 'Сбер1' }).next;
     expect(state).toEqual({ t: 'CardCreateBalance', name: 'Сбер1' });
-    state = reduce(state, { t: 'AmountEntered', amount: '10000.00', name: 'Сбер1' }).next;
-    expect(state).toEqual({ t: 'CardCreateIcon', name: 'Сбер1', amount: '10000.00' });
-    const skip = reduce(state, { t: 'IconSkip' });
-    expect(skip.next).toEqual(IDLE);
-    expect(skip.effects).toEqual([
-      { t: 'CreateCard', name: 'Сбер1', amount: '10000.00', icon: null },
-    ]);
-    const withIcon = reduce(state, { t: 'IconPicked', icon: '🟢' });
-    expect(withIcon.effects[0]).toMatchObject({ t: 'CreateCard', icon: '🟢' });
-    expect(JSON.stringify(reduce(state, { t: 'IconSkip' }))).not.toMatch(/PROFIT|CardCreateKind/);
+    const created = reduce(state, { t: 'AmountEntered', amount: '10000.00', name: 'Сбер1' });
+    expect(created.next).toEqual(IDLE);
+    expect(created.effects).toEqual([{ t: 'CreateCard', name: 'Сбер1', amount: '10000.00' }]);
+    expect(JSON.stringify(created)).not.toMatch(/PROFIT|CardCreateKind|CardCreateIcon|IconPicked/);
   });
 
   it('разморозка из меню расхода открывает список', () => {
@@ -89,10 +83,10 @@ describe('FSM reduce — без Telegram', () => {
     expect(result.effects).toEqual([{ t: 'NoWorkingCards' }]);
   });
 
-  it('callback вне белого списка стикеров игнорируется', () => {
-    const state = { t: 'CardCreateIcon' as const, name: 'Сбер1', amount: '10.00' };
-    const result = reduce(state, { t: 'IconIgnored' });
-    expect(result.next).toEqual(state);
+  it('настройки не содержат переименование и стикер', () => {
+    const state = reduce(IDLE, { t: 'Settings' });
+    expect(state.effects).toEqual([{ t: 'ShowSettings' }]);
+    expect(JSON.stringify(state)).not.toMatch(/Rename|IconChange|PromptRename|PromptSetIcon/);
   });
 
   it('cancel из любого шага возвращает Idle', () => {
@@ -139,7 +133,7 @@ describe('FSM reduce — без Telegram', () => {
       businessDate: D('2024-08-31'),
     });
     expect(started.next.t === 'BalanceUpdateAmount' && started.next.businessDate).toBe('2024-08-31');
-    const next = reduce(started.next, { t: 'AmountEntered', amount: '1.00', name: 'A' });
+    const next = reduce(started.next, { t: 'AmountEntered', amount: '1.00', name: 'A', previous: '0.00' });
     expect(next.effects.some((effect) => effect.t === 'ApplyUpdate' && effect.businessDate === '2024-08-31')).toBe(
       true,
     );

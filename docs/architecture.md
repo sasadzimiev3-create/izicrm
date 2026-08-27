@@ -75,7 +75,7 @@ src/
     money/           money.ts  percent.ts  format.ts  parse.ts
     finance/         balance.ts  capital.ts  card-scope.ts  flows.ts
                      pnl.ts  dietz.ts  card-change.ts  period.ts
-    cards/           card-name.ts  card.ts
+    cards/           card-name.ts  card.ts  bank-emoji.ts
     errors.ts
   application/
     ports/           card-repository.ts  balance-repository.ts
@@ -92,7 +92,7 @@ src/
     telegram/        bot.ts  transport.ts
   interface/telegram/
     fsm/             states.ts  transitions.ts  machine.ts  guards.ts
-    handlers/        start.ts  dashboard.ts  card-create.ts  card-rename.ts
+    handlers/        start.ts  dashboard.ts  card-create.ts
                      card-archive.ts  card-topup.ts  card-freeze.ts  card-spend.ts
                      balance-update.ts  report.ts
     keyboards/       callback-data.ts  keyboards.ts

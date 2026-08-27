@@ -20,11 +20,6 @@ export type CallbackAction =
   | 'upd_all'
   | 'upd_one'
   | 'skip'
-  | 'icon'
-  | 'rename_pick'
-  | 'card_rename'
-  | 'icon_pick'
-  | 'set_icon'
   | 'arch_pick'
   | 'arch_list'
   | 'card_archive'
@@ -55,11 +50,6 @@ const ACTIONS = new Set<string>([
   'upd_all',
   'upd_one',
   'skip',
-  'icon',
-  'rename_pick',
-  'card_rename',
-  'icon_pick',
-  'set_icon',
   'arch_pick',
   'arch_list',
   'card_archive',

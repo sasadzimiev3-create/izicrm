@@ -7,20 +7,8 @@ export type Applied<T> = { applied: true; value: T } | { applied: false };
 export type CreateCardCommand = {
   name: string;
   amount: Money;
-  icon: string | null;
+  icon?: string | null;
   createdOn: BusinessDate;
-  idempotencyKey?: string;
-};
-
-export type RenameCardCommand = {
-  cardId: CardId;
-  name: string;
-  idempotencyKey?: string;
-};
-
-export type SetCardIconCommand = {
-  cardId: CardId;
-  icon: string | null;
   idempotencyKey?: string;
 };
 

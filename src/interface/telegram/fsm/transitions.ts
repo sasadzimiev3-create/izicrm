@@ -74,12 +74,6 @@ export function reduce(state: DialogState, event: DialogEvent): ReduceResult {
       return reduceCreateName(state, event);
     case 'CardCreateBalance':
       return reduceCreateBalance(state, event);
-    case 'CardCreateIcon':
-      return reduceCreateIcon(state, event);
-    case 'CardRenameName':
-      return reduceRename(state, event);
-    case 'CardSetIcon':
-      return reduceSetIcon(state, event);
     case 'TopUpSelect':
       return reduceTopUpSelect(state, event);
     case 'TopUpAmount':
@@ -170,14 +164,6 @@ function reduceIdle(event: DialogEvent): ReduceResult {
       );
     case 'NoWorkingCards':
       return result(IDLE, { t: 'NoWorkingCards' });
-    case 'RenamePick':
-      return result(IDLE, { t: 'ShowRenameList' });
-    case 'Rename':
-      return result({ t: 'CardRenameName', cardId: event.cardId }, { t: 'PromptRename' });
-    case 'IconChangePick':
-      return result(IDLE, { t: 'ShowIconList' });
-    case 'IconChange':
-      return result({ t: 'CardSetIcon', cardId: event.cardId }, { t: 'PromptSetIcon' });
     case 'ArchivePick':
       return result(IDLE, { t: 'ShowArchiveList' });
     case 'ArchiveList':
@@ -205,56 +191,13 @@ function reduceCreateName(state: DialogState, event: DialogEvent): ReduceResult 
 function reduceCreateBalance(state: Extract<DialogState, { t: 'CardCreateBalance' }>, event: DialogEvent): ReduceResult {
   switch (event.t) {
     case 'AmountEntered':
-      return result(
-        { t: 'CardCreateIcon', name: state.name, amount: event.amount },
-        { t: 'PromptIcon', name: state.name, amount: event.amount },
-      );
-    case 'AmountInvalid':
-      return stay(state, { t: 'InvalidInput', message: event.message });
-    default:
-      return stay(state, { t: 'Ignore' });
-  }
-}
-
-function reduceCreateIcon(state: Extract<DialogState, { t: 'CardCreateIcon' }>, event: DialogEvent): ReduceResult {
-  switch (event.t) {
-    case 'IconPicked':
       return result(IDLE, {
         t: 'CreateCard',
         name: state.name,
-        amount: state.amount,
-        icon: event.icon,
+        amount: event.amount,
       });
-    case 'IconSkip':
-      return result(IDLE, { t: 'CreateCard', name: state.name, amount: state.amount, icon: null });
-    case 'IconIgnored':
-      return stay(state, { t: 'Ignore' });
-    default:
-      return stay(state, { t: 'Ignore' });
-  }
-}
-
-function reduceRename(state: Extract<DialogState, { t: 'CardRenameName' }>, event: DialogEvent): ReduceResult {
-  switch (event.t) {
-    case 'NameEntered':
-      return result(IDLE, { t: 'RenameCard', cardId: state.cardId, name: event.name });
-    case 'NameDuplicate':
-      return stay(state, { t: 'NameTaken' });
-    case 'NameInvalid':
+    case 'AmountInvalid':
       return stay(state, { t: 'InvalidInput', message: event.message });
-    default:
-      return stay(state, { t: 'Ignore' });
-  }
-}
-
-function reduceSetIcon(state: Extract<DialogState, { t: 'CardSetIcon' }>, event: DialogEvent): ReduceResult {
-  switch (event.t) {
-    case 'IconPicked':
-      return result(IDLE, { t: 'SetIcon', cardId: state.cardId, icon: event.icon });
-    case 'IconSkip':
-      return result(IDLE, { t: 'SetIcon', cardId: state.cardId, icon: null });
-    case 'IconIgnored':
-      return stay(state, { t: 'Ignore' });
     default:
       return stay(state, { t: 'Ignore' });
   }
@@ -370,7 +313,13 @@ function reduceBalanceUpdate(
     case 'AmountEntered': {
       const done: UpdatedCard[] = [
         ...state.done,
-        { cardId, name: event.name, amount: event.amount, skipped: false },
+        {
+          cardId,
+          name: event.name,
+          amount: event.amount,
+          previous: event.previous ?? event.amount,
+          skipped: false,
+        },
       ];
       return nextUpdate(state, done, {
         t: 'ApplyUpdate',
@@ -382,7 +331,7 @@ function reduceBalanceUpdate(
     case 'Skip': {
       const done: UpdatedCard[] = [
         ...state.done,
-        { cardId, name: event.name, amount: '0.00', skipped: true },
+        { cardId, name: event.name, amount: '0.00', previous: event.previous, skipped: true },
       ];
       return nextUpdate(state, done, null);
     }

@@ -19,11 +19,8 @@ export type DialogEvent =
   | { t: 'NameEntered'; name: string }
   | { t: 'NameDuplicate' }
   | { t: 'NameInvalid'; message: string }
-  | { t: 'AmountEntered'; amount: string; name: string }
+  | { t: 'AmountEntered'; amount: string; name: string; previous?: string }
   | { t: 'AmountInvalid'; message: string }
-  | { t: 'IconPicked'; icon: string }
-  | { t: 'IconSkip' }
-  | { t: 'IconIgnored' }
   | { t: 'TopUpPick' }
   | { t: 'TopUpCard'; cardId: CardId; businessDate: BusinessDate }
   | { t: 'ExpenseMenu' }
@@ -36,11 +33,7 @@ export type DialogEvent =
   | { t: 'Unfreeze'; cardId: CardId }
   | { t: 'UpdateAll'; queue: CardId[]; businessDate: BusinessDate }
   | { t: 'UpdateOne'; cardId: CardId; businessDate: BusinessDate }
-  | { t: 'Skip'; name: string }
-  | { t: 'RenamePick' }
-  | { t: 'Rename'; cardId: CardId }
-  | { t: 'IconChangePick' }
-  | { t: 'IconChange'; cardId: CardId }
+  | { t: 'Skip'; name: string; previous: string }
   | { t: 'ArchivePick' }
   | { t: 'ArchiveList' }
   | { t: 'Archive'; cardId: CardId }

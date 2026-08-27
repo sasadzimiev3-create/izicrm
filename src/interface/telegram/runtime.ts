@@ -1,4 +1,3 @@
-import { CARD_ICONS, isAllowedCardIcon } from '../../application/dto/card-icon.js';
 import { assertCardName } from '../../application/services/card.service.js';
 import { normalizeCardName } from '../../domain/cards/card-name.js';
 import { cardId, type CardId, type UserId } from '../../domain/cards/card.js';
@@ -13,6 +12,7 @@ import type { BusinessDate } from '../../domain/finance/period.js';
 import { parseAmount } from '../../domain/money/parse.js';
 import { Money } from '../../domain/money/money.js';
 import { formatMoney } from '../../domain/money/format.js';
+import { percentChange } from '../../domain/money/percent.js';
 import type { UserRecord } from '../../application/ports/user-repository.js';
 import type { Dashboard } from '../../application/dto/dashboard.js';
 import type { DbTx } from '../../application/ports/unit-of-work.js';
@@ -33,7 +33,6 @@ import {
   dispositionKeyboard,
   expenseMenuKeyboard,
   frozenCardKeyboard,
-  iconKeyboard,
   noWorkingKeyboard,
   settingsKeyboard,
   topUpMenuKeyboard,
@@ -71,20 +70,18 @@ function pickerFromDashboard(dashboard: Dashboard): { working: PickerCard[]; fro
     working: dashboard.workingCards.map((card) => ({
       id: card.id,
       name: card.name,
-      icon: card.icon,
       balance: card.balance,
     })),
     frozen: dashboard.frozenCards.map((card) => ({
       id: card.id,
       name: card.name,
-      icon: card.icon,
       balance: card.balance,
     })),
   };
 }
 
 function toPicker(row: CardRow, balance: Money | undefined): PickerCard {
-  const item: PickerCard = { id: row.id, name: row.name, icon: row.icon };
+  const item: PickerCard = { id: row.id, name: row.name };
   if (balance !== undefined) {
     return { ...item, balance };
   }
@@ -233,8 +230,6 @@ export async function handleIncoming(
 function isMutation(tag: Effect['t']): boolean {
   return (
     tag === 'CreateCard' ||
-    tag === 'RenameCard' ||
-    tag === 'SetIcon' ||
     tag === 'ApplyTopUp' ||
     tag === 'ApplyFreeze' ||
     tag === 'ApplySpend' ||
@@ -295,7 +290,6 @@ async function classifyText(
   }
   switch (state.t) {
     case 'CardCreateName':
-    case 'CardRenameName':
       return classifyName(deps, user, text);
     case 'CardCreateBalance':
     case 'TopUpAmount':
@@ -341,11 +335,13 @@ async function classifyAmount(
     throw error;
   }
   let name = '';
+  let previous: string | undefined;
   if (state.t === 'BalanceUpdateAmount') {
     const id = state.queue[state.index];
     if (id !== undefined) {
-      const card = await ownedCard(deps, user.id, id);
-      name = card?.name ?? '';
+      const locf = await deps.services.balanceUpdate.previousBalance(user.id, id, state.businessDate);
+      name = locf.card.name;
+      previous = locf.amount.toFixed();
     }
   }
   if (state.t === 'TopUpAmount' || state.t === 'SpendAmount') {
@@ -355,7 +351,10 @@ async function classifyAmount(
   if (state.t === 'CardCreateBalance') {
     name = state.name;
   }
-  return { t: 'AmountEntered', amount: amount.toFixed(), name };
+  if (previous === undefined) {
+    return { t: 'AmountEntered', amount: amount.toFixed(), name };
+  }
+  return { t: 'AmountEntered', amount: amount.toFixed(), name, previous };
 }
 
 async function classifyCallback(
@@ -409,27 +408,15 @@ async function classifyCallback(
       return { t: 'UpdateAll', queue: queue.map((row) => row.id), businessDate: today };
     }
     case 'skip':
-      if (state.t === 'CardCreateIcon' || state.t === 'CardSetIcon') {
-        return { t: 'IconSkip' };
-      }
       if (state.t === 'BalanceUpdateAmount') {
         const current = state.queue[state.index];
-        const card = current === undefined ? null : await ownedCard(deps, user.id, current);
-        return { t: 'Skip', name: card?.name ?? '' };
+        if (current === undefined) {
+          return { t: 'Home' };
+        }
+        const locf = await deps.services.balanceUpdate.previousBalance(user.id, current, state.businessDate);
+        return { t: 'Skip', name: locf.card.name, previous: locf.amount.toFixed() };
       }
       return { t: 'Home' };
-    case 'icon': {
-      const index = Number(id);
-      const icon = CARD_ICONS[index];
-      if (icon === undefined || !isAllowedCardIcon(icon)) {
-        return { t: 'IconIgnored' };
-      }
-      return { t: 'IconPicked', icon };
-    }
-    case 'rename_pick':
-      return { t: 'RenamePick' };
-    case 'icon_pick':
-      return { t: 'IconChangePick' };
     case 'arch_pick':
       return { t: 'ArchivePick' };
     case 'arch_list':
@@ -513,10 +500,6 @@ async function classifyCardCallback(
         return { t: 'NotFound' };
       }
       return { t: 'UpdateOne', cardId: id, businessDate: today };
-    case 'card_rename':
-      return { t: 'Rename', cardId: id };
-    case 'set_icon':
-      return { t: 'IconChange', cardId: id };
     case 'card_archive':
       if (!isInScope(card, today)) {
         return { t: 'NotFound' };
@@ -581,34 +564,14 @@ async function runEffect(
         cancelKeyboard(rev),
       );
       return;
-    case 'PromptIcon':
-      await send(
-        sender,
-        COPY.promptIcon(effect.name, formatMoney(Money.from(effect.amount))),
-        iconKeyboard(rev),
-      );
-      return;
-    case 'PromptRename':
-      await send(sender, COPY.promptRename, cancelKeyboard(rev));
-      return;
-    case 'PromptSetIcon':
-      await send(sender, COPY.promptSetIcon, iconKeyboard(rev));
-      return;
     case 'CreateCard': {
       await deps.services.card.create(user.id, {
         name: effect.name,
         amount: Money.from(effect.amount),
-        icon: effect.icon,
         createdOn: today,
       });
       return;
     }
-    case 'RenameCard':
-      await deps.services.card.rename(user.id, { cardId: effect.cardId, name: effect.name });
-      return;
-    case 'SetIcon':
-      await deps.services.card.setIcon(user.id, { cardId: effect.cardId, icon: effect.icon });
-      return;
     case 'NameTaken':
       await send(sender, COPY.nameTaken, cancelKeyboard(rev));
       return;
@@ -619,8 +582,6 @@ async function runEffect(
     case 'ShowFreezeList':
     case 'ShowSpendList':
     case 'ShowUnfreezeList':
-    case 'ShowRenameList':
-    case 'ShowIconList':
     case 'ShowArchiveList':
     case 'ShowArchiveTargets':
       await sendPicker(deps, user, sender, effect.t, state, rev, today);
@@ -688,7 +649,7 @@ async function runEffect(
       const locf = await deps.services.balanceUpdate.previousBalance(user.id, card.id, today);
       await send(
         sender,
-        renderFrozenCard(card.name, card.icon, locf.amount),
+        renderFrozenCard(card.name, locf.amount),
         frozenCardKeyboard(card.id, rev),
       );
       return;
@@ -841,7 +802,6 @@ async function sendPicker(
         rows.map((card) => ({
           id: card.id,
           name: card.name,
-          icon: card.icon,
           balance: card.balance,
         })),
         'frozen',
@@ -851,15 +811,14 @@ async function sendPicker(
     );
     return;
   }
-  if (kind === 'ShowRenameList' || kind === 'ShowIconList' || kind === 'ShowArchiveList') {
+  if (kind === 'ShowArchiveList') {
     const cards = [...dashboard.workingCards, ...dashboard.frozenCards];
-    const action = kind === 'ShowRenameList' ? 'card_rename' : kind === 'ShowIconList' ? 'set_icon' : 'card_archive';
     await send(
       sender,
       COPY.pickMaterial,
       cardPickerKeyboard(
-        cards.map((card) => ({ id: card.id, name: card.name, icon: card.icon, balance: card.balance })),
-        action,
+        cards.map((card) => ({ id: card.id, name: card.name, balance: card.balance })),
+        'card_archive',
         rev,
         { back: 'settings' },
       ),
@@ -938,16 +897,21 @@ async function sendUpdateSummary(
       const card =
         dashboard.workingCards.find((item) => item.id === row.cardId) ??
         dashboard.frozenCards.find((item) => item.id === row.cardId);
+      const amount = card?.balance ?? Money.from(row.amount);
+      const previous = Money.from(row.previous);
+      const delta = amount.minus(previous);
       return {
         name: row.name,
-        amount: card?.balance ?? Money.from(row.amount),
-        change: card?.change ?? null,
+        amount,
+        change: {
+          defined: true as const,
+          amount: delta,
+          percent: percentChange(delta, previous),
+        },
       };
     });
-  const dailyAmount = dashboard.daily.defined ? dashboard.daily.amount : Money.zero();
-  const dailyPercent = dashboard.daily.defined
-    ? dashboard.daily.percent
-    : { defined: false as const, reason: 'NO_PREVIOUS_DATA' as const };
+  const dailyAmount = dashboard.daily.defined ? dashboard.daily.amount : dashboard.monthly.amount;
+  const dailyPercent = dashboard.daily.defined ? dashboard.daily.percent : dashboard.monthly.percent;
   await send(
     sender,
     renderUpdateSummary({

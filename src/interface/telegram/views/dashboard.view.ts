@@ -1,4 +1,5 @@
 import type { Dashboard, DashboardCard } from '../../../application/dto/dashboard.js';
+import { getBankEmoji } from '../../../domain/cards/bank-emoji.js';
 import { formatMoney, formatMoneyDelta, formatPercent } from '../../../domain/money/format.js';
 import type { PercentResult } from '../../../domain/money/percent.js';
 import { Money } from '../../../domain/money/money.js';
@@ -8,13 +9,11 @@ import { COPY } from './copy.js';
 import { formatDayMonth, formatDaysSuffix, formatMonthTitle } from './dates.js';
 
 const EM_DASH = '\u2014';
+const CARD_RULE = '────────';
 const TELEGRAM_LIMIT = 4096;
 
-export function formatCardTitle(icon: string | null, name: string): string {
-  if (icon === null || icon === '') {
-    return name;
-  }
-  return `${icon} ${name}`;
+export function formatCardTitle(name: string): string {
+  return `${getBankEmoji(name)} ${name}`;
 }
 
 export function formatPnlLine(amount: Money, percent: PercentResult): string {
@@ -55,9 +54,25 @@ function dailyValue(dashboard: Dashboard): string {
 }
 
 function renderCardBlock(card: DashboardCard): string {
-  const title = formatCardTitle(card.icon, card.name);
+  const title = formatCardTitle(card.name);
   const change = formatCardChange(card.change);
-  return `${title}    ${formatMoney(card.balance)}\n${change}`;
+  return `${title} ${EM_DASH} ${formatMoney(card.balance)}\n${change}`;
+}
+
+function renderCardList(cards: DashboardCard[]): string[] {
+  const lines: string[] = [];
+  for (let i = 0; i < cards.length; i += 1) {
+    const card = cards[i];
+    if (card === undefined) {
+      continue;
+    }
+    if (i > 0) {
+      lines.push(CARD_RULE);
+    }
+    lines.push(renderCardBlock(card));
+    lines.push('');
+  }
+  return lines;
 }
 
 function hasFrozen(dashboard: Dashboard): boolean {
@@ -84,7 +99,9 @@ export function renderDashboard(dashboard: Dashboard): string {
   if (hasFrozen(dashboard)) {
     lines.push(`${COPY.frozenHeader}  ${formatMoney(dashboard.frozenCapital)}`);
   }
-  lines.push(`${COPY.totalHeader}      ${formatMoney(dashboard.totalCapital)}`);
+  if (!dashboard.totalCapital.eq(dashboard.workingCapital)) {
+    lines.push(`${COPY.totalHeader}      ${formatMoney(dashboard.totalCapital)}`);
+  }
   lines.push('');
 
   const title = dailyTitle(dashboard);
@@ -102,19 +119,13 @@ export function renderDashboard(dashboard: Dashboard): string {
   if (dashboard.workingCards.length > 0) {
     lines.push(COPY.workingHeader);
     lines.push('');
-    for (const card of dashboard.workingCards) {
-      lines.push(renderCardBlock(card));
-      lines.push('');
-    }
+    lines.push(...renderCardList(dashboard.workingCards));
   }
 
   if (hasFrozen(dashboard)) {
     lines.push(COPY.frozenHeader);
     lines.push('');
-    for (const card of dashboard.frozenCards) {
-      lines.push(renderCardBlock(card));
-      lines.push('');
-    }
+    lines.push(...renderCardList(dashboard.frozenCards));
   }
 
   return lines.join('\n').trimEnd();

@@ -103,7 +103,22 @@ describe('UI-01 снимки главного экрана', () => {
     expect(text).toContain(COPY.todayPrefix);
     expect(text).toContain('🟢 Сбер 7121*');
     expect(text).toContain('🔴 Альфа 7131*');
+    expect(text).toContain('────────');
     expect(text).toMatchSnapshot();
+  });
+
+  it('Всего скрывается, если сумма совпадает с «В работе»', () => {
+    const text = renderDashboard(
+      dashboard({
+        frozenCapital: Money.zero(),
+        frozenCards: [],
+        workingCapital: Money.from('681466'),
+        totalCapital: Money.from('681466'),
+      }),
+    );
+    expect(text).toContain(`${COPY.workingHeader}    `);
+    expect(text).not.toContain(COPY.totalHeader);
+    expect(text).not.toContain(COPY.frozenHeader);
   });
 
   it('без материалов — онбординг', () => {
@@ -214,10 +229,11 @@ describe('UI-02 / UI-03 / UI-04', () => {
   });
 });
 
-describe('вёрстка строки без стикера (FR-2.13)', () => {
-  it('пустой icon не ломает строку', () => {
-    expect(formatCardTitle(null, 'Сбер')).toBe('Сбер');
-    expect(formatCardTitle('', 'Сбер')).toBe('Сбер');
-    expect(formatCardTitle('🟢', 'Сбер')).toBe('🟢 Сбер');
+describe('вёрстка строки материала', () => {
+  it('маркер банка берётся из названия, не из сохранённой иконки', () => {
+    expect(formatCardTitle('Сбер')).toBe('🟢 Сбер');
+    expect(formatCardTitle('Втб2312')).toBe('🔵 Втб2312');
+    expect(formatCardTitle('Альфа-Банк')).toBe('🔴 Альфа-Банк');
+    expect(formatCardTitle('Тинькофф')).toBe('🟡 Тинькофф');
   });
 });

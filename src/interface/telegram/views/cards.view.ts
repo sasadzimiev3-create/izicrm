@@ -16,13 +16,13 @@ export function renderArchivedList(cards: CardRow[]): string {
   const lines = [COPY.archiveMaterials, COPY.archiveReadonly, ''];
   for (const card of cards) {
     const when = card.archivedOn ?? '';
-    lines.push(`${formatCardTitle(card.icon, card.name)} · ${when}`);
+    lines.push(`${formatCardTitle(card.name)} ${'\u2014'} ${when}`);
   }
   return lines.join('\n');
 }
 
-export function renderFrozenCard(name: string, icon: string | null, balance: Money): string {
-  return `${formatCardTitle(icon, name)} · ${formatMoney(balance)}\n${COPY.frozenLabel}`;
+export function renderFrozenCard(name: string, balance: Money): string {
+  return `${formatCardTitle(name)} ${'\u2014'} ${formatMoney(balance)}\n${COPY.frozenLabel}`;
 }
 
 export function renderNoWorking(): string {

@@ -122,7 +122,8 @@ npm run lint           # ESLint, включая правила границ сл
 npm run typecheck
 ```
 
-Окружение: Node 24+, PostgreSQL 17, Docker. На машине разработчика пока не установлены.
+Окружение: Node 24+, PostgreSQL 17, Docker. Продакшен — Linux VPS (`77.239.107.97`,
+`/opt/izicrm`), не Mac. Как выкатывать и ограничения сети — `.cursor/rules/production-server.mdc`.
 
 ---
 

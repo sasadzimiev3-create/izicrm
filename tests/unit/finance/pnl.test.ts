@@ -350,7 +350,7 @@ describe('примеры П-1…П-8', () => {
     }
   });
 
-  it('FT-17 / П-8: исправление в день создания — только актуальная запись', () => {
+  it('FT-17: стартовый депозит равен капиталу — P&L = 0', () => {
     const card = makeCard({ id: 1, createdOn: '2024-08-20' });
     const ledger = makeLedger([card], [makeEntry(1, '2024-08-20', '3000', '3000')]);
     const all = allTimePnl(ledger, d('2024-08-20'));
@@ -359,6 +359,18 @@ describe('примеры П-1…П-8', () => {
       expectMoney(all.amount, '0');
       expectMoney(all.closingCapital, '3000');
       expectMoney(all.totalDeposits, '3000');
+    }
+  });
+
+  it('FT-17b / П-8: обновление в день создания сохраняет депозит, P&L = дельта', () => {
+    const card = makeCard({ id: 1, createdOn: '2024-08-20' });
+    const ledger = makeLedger([card], [makeEntry(1, '2024-08-20', '35000', '30000')]);
+    const all = allTimePnl(ledger, d('2024-08-20'));
+    expect(all.defined).toBe(true);
+    if (all.defined) {
+      expectMoney(all.amount, '5000');
+      expectMoney(all.closingCapital, '35000');
+      expectMoney(all.totalDeposits, '30000');
     }
   });
 

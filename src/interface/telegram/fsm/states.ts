@@ -10,6 +10,7 @@ export type UpdatedCard = {
   cardId: CardId;
   name: string;
   amount: string;
+  previous: string;
   skipped: boolean;
 };
 
@@ -22,9 +23,6 @@ export type DialogState =
   | { t: 'Idle' }
   | { t: 'CardCreateName' }
   | { t: 'CardCreateBalance'; name: string }
-  | { t: 'CardCreateIcon'; name: string; amount: string }
-  | { t: 'CardRenameName'; cardId: CardId }
-  | { t: 'CardSetIcon'; cardId: CardId }
   | { t: 'TopUpSelect' }
   | { t: 'TopUpAmount'; cardId: CardId; businessDate: BusinessDate }
   | { t: 'FreezeSelect' }
@@ -53,6 +51,7 @@ const updatedCardSchema = z.object({
   cardId: cardIdSchema,
   name: z.string(),
   amount: moneyStringSchema,
+  previous: moneyStringSchema.optional(),
   skipped: z.boolean(),
 });
 
@@ -60,9 +59,6 @@ export const dialogStateSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('Idle') }),
   z.object({ t: z.literal('CardCreateName') }),
   z.object({ t: z.literal('CardCreateBalance'), name: nameSchema }),
-  z.object({ t: z.literal('CardCreateIcon'), name: nameSchema, amount: moneyStringSchema }),
-  z.object({ t: z.literal('CardRenameName'), cardId: cardIdSchema }),
-  z.object({ t: z.literal('CardSetIcon'), cardId: cardIdSchema }),
   z.object({ t: z.literal('TopUpSelect') }),
   z.object({ t: z.literal('TopUpAmount'), cardId: cardIdSchema, businessDate: businessDateSchema }),
   z.object({ t: z.literal('FreezeSelect') }),
@@ -98,6 +94,7 @@ function brandUpdated(row: z.infer<typeof updatedCardSchema>): UpdatedCard {
     cardId: brandCardId(row.cardId),
     name: row.name,
     amount: row.amount,
+    previous: row.previous ?? row.amount,
     skipped: row.skipped,
   };
 }
@@ -120,12 +117,6 @@ export function parseDialogState(raw: unknown): DialogState {
       return { t: state.t };
     case 'CardCreateBalance':
       return { t: 'CardCreateBalance', name: state.name };
-    case 'CardCreateIcon':
-      return { t: 'CardCreateIcon', name: state.name, amount: state.amount };
-    case 'CardRenameName':
-      return { t: 'CardRenameName', cardId: brandCardId(state.cardId) };
-    case 'CardSetIcon':
-      return { t: 'CardSetIcon', cardId: brandCardId(state.cardId) };
     case 'TopUpAmount':
       return {
         t: 'TopUpAmount',
@@ -177,10 +168,6 @@ export function serializeDialogState(state: DialogState): Record<string, unknown
       return { t: state.t };
     case 'CardCreateBalance':
       return { t: state.t, name: state.name };
-    case 'CardCreateIcon':
-      return { t: state.t, name: state.name, amount: state.amount };
-    case 'CardRenameName':
-    case 'CardSetIcon':
     case 'FrozenCardMenu':
     case 'ArchiveConfirm':
       return { t: state.t, cardId: state.cardId };
@@ -197,6 +184,7 @@ export function serializeDialogState(state: DialogState): Record<string, unknown
           cardId: row.cardId as number,
           name: row.name,
           amount: row.amount,
+          previous: row.previous,
           skipped: row.skipped,
         })),
       };

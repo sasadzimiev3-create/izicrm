@@ -14,12 +14,7 @@ export type Effect =
   | { t: 'ShowArchived' }
   | { t: 'PromptName' }
   | { t: 'PromptBalance'; name: string }
-  | { t: 'PromptIcon'; name: string; amount: string }
-  | { t: 'PromptRename' }
-  | { t: 'PromptSetIcon' }
-  | { t: 'CreateCard'; name: string; amount: string; icon: string | null }
-  | { t: 'RenameCard'; cardId: CardId; name: string }
-  | { t: 'SetIcon'; cardId: CardId; icon: string | null }
+  | { t: 'CreateCard'; name: string; amount: string }
   | { t: 'NameTaken' }
   | { t: 'InvalidInput'; message: string }
   | { t: 'ShowTopUpList' }
@@ -36,8 +31,6 @@ export type Effect =
   | { t: 'PromptUpdate' }
   | { t: 'ApplyUpdate'; cardId: CardId; amount: string; businessDate: BusinessDate }
   | { t: 'ShowUpdateSummary'; done: UpdatedCard[]; businessDate: BusinessDate }
-  | { t: 'ShowRenameList' }
-  | { t: 'ShowIconList' }
   | { t: 'ShowArchiveList' }
   | { t: 'PromptArchiveConfirm'; cardId: CardId }
   | { t: 'PromptDisposition'; name: string; remainder: string }

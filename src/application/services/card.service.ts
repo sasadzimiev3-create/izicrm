@@ -1,13 +1,12 @@
 import type { CardRow } from '../ports/card-repository.js';
 import { normalizeCardName } from '../../domain/cards/card-name.js';
-import { ConflictError, NotFoundError, ValidationError } from '../../domain/errors.js';
+import { ConflictError, ValidationError } from '../../domain/errors.js';
 import { Money } from '../../domain/money/money.js';
 import type { CardId, UserId } from '../../domain/cards/card.js';
 
-import type { Applied, CreateCardCommand, RenameCardCommand, SetCardIconCommand } from '../dto/commands.js';
-import { assertCardIcon } from '../dto/card-icon.js';
+import type { Applied, CreateCardCommand } from '../dto/commands.js';
 
-import { NOT_FOUND, once, requireUserCard, type ServiceDeps } from './support.js';
+import { once, type ServiceDeps } from './support.js';
 
 const NAME_MAX = 64;
 
@@ -19,14 +18,14 @@ export function assertCardName(name: string): void {
 }
 
 /**
- * Создание, переименование и стикер карты. Стартовый баланс — всегда депозит (C-29).
+ * Создание карты. Стартовый баланс — всегда депозит (C-29).
+ * Маркер банка считается из названия в UI (`getBankEmoji`), поле `icon` не пишется.
  */
 export class CardService {
   constructor(private readonly deps: ServiceDeps) {}
 
   async create(userId: UserId, command: CreateCardCommand): Promise<Applied<CardRow>> {
     assertCardName(command.name);
-    const icon = assertCardIcon(command.icon);
     if (command.amount.isNegative()) {
       throw new ValidationError('Некорректная сумма');
     }
@@ -42,7 +41,7 @@ export class CardService {
         }
         const card = await this.deps.cards.insertUserCard(
           userId,
-          { name: command.name, createdOn: command.createdOn, icon },
+          { name: command.name, createdOn: command.createdOn, icon: null },
           tx,
         );
         await this.deps.balances.insertSuperseding(
@@ -58,40 +57,6 @@ export class CardService {
           tx,
         );
         return card;
-      }),
-    );
-  }
-
-  async rename(userId: UserId, command: RenameCardCommand): Promise<Applied<void>> {
-    assertCardName(command.name);
-    return this.deps.uow.withUser(userId, (tx) =>
-      once(this.deps.processed, userId, command.idempotencyKey, tx, async () => {
-        const card = await requireUserCard(this.deps.cards, userId, command.cardId, tx);
-        if (card.archivedOn !== null) {
-          throw new NotFoundError(NOT_FOUND);
-        }
-        const duplicate = await this.deps.cards.findActiveByNormalizedName(
-          userId,
-          normalizeCardName(command.name),
-          tx,
-        );
-        if (duplicate !== null && duplicate.id !== card.id) {
-          throw new ConflictError('Материал с таким названием уже есть');
-        }
-        await this.deps.cards.renameUserCard(userId, command.cardId, command.name, tx);
-      }),
-    );
-  }
-
-  async setIcon(userId: UserId, command: SetCardIconCommand): Promise<Applied<void>> {
-    const icon = assertCardIcon(command.icon);
-    return this.deps.uow.withUser(userId, (tx) =>
-      once(this.deps.processed, userId, command.idempotencyKey, tx, async () => {
-        const card = await requireUserCard(this.deps.cards, userId, command.cardId, tx);
-        if (card.archivedOn !== null) {
-          throw new NotFoundError(NOT_FOUND);
-        }
-        await this.deps.cards.setUserCardIcon(userId, command.cardId, icon, tx);
       }),
     );
   }

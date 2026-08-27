@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ConflictError, NotFoundError, ValidationError } from '../../../src/domain/errors.js';
+import { ConflictError, NotFoundError } from '../../../src/domain/errors.js';
 import { parseBusinessDate } from '../../../src/domain/finance/period.js';
 import { Money } from '../../../src/domain/money/money.js';
 import { cardId } from '../../../src/domain/cards/card.js';
@@ -14,7 +14,7 @@ const D = parseBusinessDate;
 describe('CardService', () => {
   const db = useAppDb();
 
-  it('создаёт карту с депозитом capital_in = amount и необязательным стикером', async () => {
+  it('создаёт карту с депозитом capital_in = amount; стикер пользователя не пишется', async () => {
     const app = createTestApp(db.pool());
     const userId = parseUserId(await insertUser(db.pool(), '51001'));
 
@@ -27,16 +27,16 @@ describe('CardService', () => {
       }),
     );
     expect(created.name).toBe('Сбер1');
-    expect(created.icon).toBe('🟢');
+    expect(created.icon).toBeNull();
 
     const dash = await app.dashboard.getDashboard(userId, D('2024-08-20'));
     expect(dash.totalCapital.toFixed()).toBe('10000.00');
     expect(dash.daily.defined).toBe(false);
     expect(dash.workingCards).toHaveLength(1);
-    expect(dash.workingCards[0]?.icon).toBe('🟢');
+    expect(dash.workingCards[0]?.icon).toBeNull();
   });
 
-  it('пропуск стикера записывает icon = null; произвольный текст отклоняется', async () => {
+  it('поле icon всегда null, даже если в команде передали текст', async () => {
     const app = createTestApp(db.pool());
     const userId = parseUserId(await insertUser(db.pool(), '51002'));
 
@@ -44,20 +44,11 @@ describe('CardService', () => {
       await app.card.create(userId, {
         name: 'Без стикера',
         amount: Money.from('1.00'),
-        icon: null,
+        icon: 'не эмодзи',
         createdOn: D('2024-08-20'),
       }),
     );
     expect(created.icon).toBeNull();
-
-    await expect(
-      app.card.create(userId, {
-        name: 'Мусор',
-        amount: Money.from('1.00'),
-        icon: 'не эмодзи',
-        createdOn: D('2024-08-20'),
-      }),
-    ).rejects.toBeInstanceOf(ValidationError);
 
     const dash = await app.dashboard.getDashboard(userId, D('2024-08-20'));
     expect(dash.workingCards).toHaveLength(1);
@@ -137,10 +128,10 @@ describe('CardService', () => {
   });
 });
 
-describe('П-8 исправление в день создания', () => {
+describe('П-8 обновление в день создания', () => {
   const db = useAppDb();
 
-  it('депозит следует за исправленным балансом, старая запись сохранена', async () => {
+  it('депозит не переписывается, разница нового и прежнего баланса — P&L', async () => {
     const app = createTestApp(db.pool());
     const userId = parseUserId(await insertUser(db.pool(), '51006'));
     const created = unwrap(
@@ -154,23 +145,34 @@ describe('П-8 исправление в день создания', () => {
     unwrap(
       await app.balanceUpdate.update(userId, {
         cardId: created.id,
-        amount: Money.from('3000.00'),
+        amount: Money.from('35000.00'),
         businessDate: D('2024-08-20'),
       }),
     );
 
     const dash = await app.dashboard.getDashboard(userId, D('2024-08-20'));
-    expect(dash.totalCapital.toFixed()).toBe('3000.00');
-    expect(dash.daily.defined).toBe(false);
+    expect(dash.totalCapital.toFixed()).toBe('35000.00');
+    expect(dash.monthly.amount.toFixed()).toBe('5000.00');
+
+    unwrap(
+      await app.balanceUpdate.update(userId, {
+        cardId: created.id,
+        amount: Money.from('25000.00'),
+        businessDate: D('2024-08-20'),
+      }),
+    );
+    const down = await app.dashboard.getDashboard(userId, D('2024-08-20'));
+    expect(down.totalCapital.toFixed()).toBe('25000.00');
+    expect(down.monthly.amount.toFixed()).toBe('-5000.00');
 
     const history = await app.uow.withUser(userId, (tx) =>
       app.reports.loadUserHistory(userId, D('2024-08-01'), D('2024-08-31'), tx),
     );
     expect(history.entries).toHaveLength(1);
-    expect(history.entries[0]?.amount.toFixed()).toBe('3000.00');
-    expect(history.entries[0]?.capitalIn.toFixed()).toBe('3000.00');
+    expect(history.entries[0]?.amount.toFixed()).toBe('25000.00');
+    expect(history.entries[0]?.capitalIn.toFixed()).toBe('30000.00');
     expect(history.flows).toHaveLength(1);
-    expect(history.flows[0]?.amount.toFixed()).toBe('3000.00');
+    expect(history.flows[0]?.amount.toFixed()).toBe('30000.00');
 
     const totalRows = await withUser(db.pool(), String(userId), async (client) => {
       const result = await client.query<{ n: string }>(
@@ -179,6 +181,6 @@ describe('П-8 исправление в день создания', () => {
       );
       return result.rows[0]?.n;
     });
-    expect(totalRows).toBe('2');
+    expect(totalRows).toBe('3');
   });
 });

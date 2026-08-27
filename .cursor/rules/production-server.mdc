@@ -1,0 +1,32 @@
+---
+description: Боевой Linux-сервер izicrm — деплой, сеть, прокси Telegram
+alwaysApply: true
+---
+
+# Боевой сервер
+
+Бот в проде **не на Mac**. VPS: Ubuntu 24.04, IP `77.239.107.97`, SSH `root@77.239.107.97`.
+Код на сервере: `/opt/izicrm`. Стек: Docker Compose (`postgres` + `bot`, образ `izicrm-bot:local`).
+
+Правки в Cursor **сами в Telegram не попадают**. Выкат: собрать образ на Mac под **linux/amd64**,
+залить, пересоздать контейнер. Сервер — x86_64; образы с Apple Silicon без `--platform linux/amd64`
+не стартуют.
+
+```bash
+# Mac
+docker build --platform linux/amd64 -t izicrm-bot:local .
+docker save izicrm-bot:local | gzip > /tmp/izicrm-bot-proxy.tar.gz
+scp /tmp/izicrm-bot-proxy.tar.gz root@77.239.107.97:/tmp/
+
+# сервер
+gunzip -c /tmp/izicrm-bot-proxy.tar.gz | docker load
+cd /opt/izicrm && docker compose up -d --force-recreate bot --wait
+```
+
+С VPS часто нет исходящего HTTPS к GitHub, Docker Hub и `api.telegram.org`. Не предлагать
+`git clone` / `docker compose build` на сервере как основной путь. Telegram — через
+`TELEGRAM_PROXY_URL` в `/opt/izicrm/.env` (только сервис `bot`). Секреты и пароли прокси
+в git и в чат не писать. На сервере у `bot`/`migrate` — `image: izicrm-bot:local` и
+`pull_policy: never`, не `build: .`.
+
+Не запускать `npm run dev` на Mac с тем же токеном, пока крутится контейнер на VPS.

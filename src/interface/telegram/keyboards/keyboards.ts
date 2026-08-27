@@ -1,4 +1,3 @@
-import { CARD_ICONS } from '../../../application/dto/card-icon.js';
 import { formatMoney } from '../../../domain/money/format.js';
 import type { CardId } from '../../../domain/cards/card.js';
 import type { Money } from '../../../domain/money/money.js';
@@ -7,11 +6,22 @@ import { encodeCallback, type CallbackAction } from './callback-data.js';
 import { COPY } from '../views/copy.js';
 import { formatCardTitle } from '../views/dashboard.view.js';
 
-export type KeyboardButton = { text: string; data: string };
+export type KeyboardButtonStyle = 'primary' | 'success' | 'danger';
+export type KeyboardButton = { text: string; data: string; style?: KeyboardButtonStyle };
 export type Keyboard = KeyboardButton[][];
 
-function btn(text: string, action: CallbackAction, id: string | number | null, rev: number): KeyboardButton {
-  return { text, data: encodeCallback(action, id, rev) };
+function btn(
+  text: string,
+  action: CallbackAction,
+  id: string | number | null,
+  rev: number,
+  style?: KeyboardButtonStyle,
+): KeyboardButton {
+  const button: KeyboardButton = { text, data: encodeCallback(action, id, rev) };
+  if (style === undefined) {
+    return button;
+  }
+  return { ...button, style };
 }
 
 function cancelRow(rev: number): KeyboardButton[] {
@@ -35,11 +45,14 @@ export function mainKeyboard(
   opts: { empty?: boolean; page?: number; hasPrev?: boolean; hasNext?: boolean } = {},
 ): Keyboard {
   if (opts.empty === true) {
-    return [[btn('➕ Пополнить', 'topup', null, rev)]];
+    return [[btn(COPY.topUpMenu, 'topup', null, rev, 'success')]];
   }
   const rows: Keyboard = [
     [btn('🔄 Обновить балансы', 'upd_all', null, rev)],
-    [btn('➕ Пополнить', 'topup', null, rev), btn('❄️ Расход', 'expense', null, rev)],
+    [
+      btn(COPY.topUpMenu, 'topup', null, rev, 'success'),
+      btn(COPY.expenseMenu, 'expense', null, rev, 'danger'),
+    ],
     [btn('⚙️ Настройки', 'settings', null, rev)],
   ];
   const nav: KeyboardButton[] = [];
@@ -83,8 +96,6 @@ export function expenseMenuKeyboard(rev: number): Keyboard {
 export function settingsKeyboard(rev: number): Keyboard {
   return [
     [btn(`📊 ${COPY.report}`, 'report', null, rev)],
-    [btn(`✏️ ${COPY.renameMaterial}`, 'rename_pick', null, rev)],
-    [btn(`🎨 ${COPY.changeSticker}`, 'icon_pick', null, rev)],
     [btn(`🗑 ${COPY.deleteMaterial}`, 'arch_pick', null, rev)],
     [btn(`📁 ${COPY.archiveMaterials}`, 'arch_list', null, rev)],
     backRow(rev),
@@ -94,7 +105,6 @@ export function settingsKeyboard(rev: number): Keyboard {
 export type PickerCard = {
   id: CardId;
   name: string;
-  icon: string | null;
   balance?: Money;
 };
 
@@ -105,21 +115,10 @@ export function cardPickerKeyboard(
   opts: { back?: CallbackAction } = {},
 ): Keyboard {
   const rows: Keyboard = cards.map((card) => {
-    const balance = card.balance === undefined ? '' : `  · ${formatMoney(card.balance)}`;
-    return [btn(truncate(`${formatCardTitle(card.icon, card.name)}${balance}`), action, card.id, rev)];
+    const balance = card.balance === undefined ? '' : ` ${'\u2014'} ${formatMoney(card.balance)}`;
+    return [btn(truncate(`${formatCardTitle(card.name)}${balance}`), action, card.id, rev)];
   });
   rows.push([btn(`◀️ ${COPY.back}`, opts.back ?? 'home', null, rev)]);
-  return rows;
-}
-
-export function iconKeyboard(rev: number): Keyboard {
-  const icons: KeyboardButton[] = CARD_ICONS.map((icon, index) => btn(icon, 'icon', index, rev));
-  const rowSize = 3;
-  const rows: Keyboard = [];
-  for (let i = 0; i < icons.length; i += rowSize) {
-    rows.push(icons.slice(i, i + rowSize));
-  }
-  rows.push([btn(`⏭ ${COPY.skipSticker}`, 'skip', null, rev), btn(COPY.cancel, 'cancel', null, rev)]);
   return rows;
 }
 
@@ -157,11 +156,20 @@ export function dashboardKeyboard(
 }
 
 export function toInlineMarkup(keyboard: Keyboard): {
-  inline_keyboard: { text: string; callback_data: string }[][];
+  inline_keyboard: { text: string; callback_data: string; style?: KeyboardButtonStyle }[][];
 } {
   return {
     inline_keyboard: keyboard.map((row) =>
-      row.map((button) => ({ text: button.text, callback_data: button.data })),
+      row.map((button) => {
+        const item: { text: string; callback_data: string; style?: KeyboardButtonStyle } = {
+          text: button.text,
+          callback_data: button.data,
+        };
+        if (button.style !== undefined) {
+          return { ...item, style: button.style };
+        }
+        return item;
+      }),
     ),
   };
 }
