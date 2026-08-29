@@ -100,14 +100,23 @@ describe('UI-01 снимки главного экрана', () => {
     expect(text).toContain(`318${NARROW}861 ₽`);
     expect(text).toContain('+327 ₽ / +0.03%');
     expect(text).toContain('+1.07%');
-    expect(text).toContain(COPY.todayPrefix);
-    expect(text).toContain('🟢 Сбер 7121*');
-    expect(text).toContain('🔴 Альфа 7131*');
-    expect(text).toContain('────────');
+    expect(text).toContain(`${COPY.todayPrefix}:`);
+    expect(text).toContain('1) 🟢 Сбер 7121*');
+    expect(text).toContain('2) 🔵 Втб 0134*');
+    expect(text).toContain('3) 🔴 Альфа 7131*');
+    expect(text).toContain(`<u><b>${COPY.totalLine(`1${NARROW}000${NARROW}327 ₽`)}</b></u>`);
+    expect(text).toContain(`<u>${COPY.workingHeader}</u>`);
+    expect(text).toContain(`<u>${COPY.frozenHeader}</u>`);
+    expect(text).toContain(COPY.sectionRule);
+    expect(COPY.sectionRule).toHaveLength(34);
+    expect(text).toContain(`[+200 ₽ / +0.16%]`);
+    const workingIdx = text.split('\n').indexOf(`<u>${COPY.workingHeader}</u>`);
+    expect(text.split('\n')[workingIdx + 1]).toMatch(/^1\) 🟢 Сбер/);
+    expect(text.indexOf('За Август:')).toBeLessThan(text.indexOf(`${COPY.todayPrefix}:`));
     expect(text).toMatchSnapshot();
   });
 
-  it('Всего скрывается, если сумма совпадает с «В работе»', () => {
+  it('разрез скрывается, если нет замороженного — «Всего» остаётся в шапке', () => {
     const text = renderDashboard(
       dashboard({
         frozenCapital: Money.zero(),
@@ -116,8 +125,8 @@ describe('UI-01 снимки главного экрана', () => {
         totalCapital: Money.from('681466'),
       }),
     );
-    expect(text).toContain(`${COPY.workingHeader}    `);
-    expect(text).not.toContain(COPY.totalHeader);
+    expect(text).toContain(COPY.totalLine(`681${NARROW}466 ₽`));
+    expect(text).not.toContain('[💳В работе:');
     expect(text).not.toContain(COPY.frozenHeader);
   });
 
@@ -173,7 +182,10 @@ describe('UI-01 снимки главного экрана', () => {
       }),
     );
     expect(allFrozen).toContain(`0 ₽`);
-    expect(allFrozen).toContain('Альфа 7131*');
+    expect(allFrozen).toContain('1) 🔴 Альфа 7131*');
+    expect(allFrozen.split('\n')).not.toContain(COPY.workingHeader);
+    const frozenIdx = allFrozen.split('\n').indexOf(`<u>${COPY.frozenHeader}</u>`);
+    expect(allFrozen.split('\n')[frozenIdx + 1]).toMatch(/^1\) 🔴 Альфа/);
     expect(allFrozen).toMatchSnapshot();
   });
 });
@@ -199,14 +211,13 @@ describe('UI-02 / UI-03 / UI-04', () => {
     expect(text).not.toMatch(/\+30\u202F000 ₽ \/ 0/);
   });
 
-  it('UI-03: СЕГОДНЯ против ПОСЛЕДНЕЕ ОБНОВЛЕНИЕ', () => {
+  it('UI-03: «За сегодня» против даты последнего обновления', () => {
     const today = renderDashboard(dashboard({ lastUpdateDate: D('2024-08-20'), today: D('2024-08-20') }));
-    expect(today).toContain(COPY.todayPrefix);
-    expect(today).not.toContain(COPY.lastUpdatePrefix);
+    expect(today).toContain(`${COPY.todayPrefix}:`);
+    expect(today).not.toContain('За 20 августа:');
     const older = renderDashboard(dashboard({ lastUpdateDate: D('2024-08-16'), today: D('2024-08-20') }));
-    expect(older).toContain(COPY.lastUpdatePrefix);
-    expect(older).toContain('16 августа');
-    expect(older).not.toContain(`${COPY.todayPrefix} ·`);
+    expect(older).toContain('За 16 августа:');
+    expect(older).not.toContain(`${COPY.todayPrefix}:`);
   });
 
   it('UI-04: подпись за N дней при пропущенных днях', () => {
@@ -235,5 +246,27 @@ describe('вёрстка строки материала', () => {
     expect(formatCardTitle('Втб2312')).toBe('🔵 Втб2312');
     expect(formatCardTitle('Альфа-Банк')).toBe('🔴 Альфа-Банк');
     expect(formatCardTitle('Тинькофф')).toBe('🟡 Тинькофф');
+  });
+
+  it('имя с HTML-символами экранируется', () => {
+    const text = renderDashboard(
+      dashboard({
+        frozenCapital: Money.zero(),
+        frozenCards: [],
+        workingCapital: Money.from('124276'),
+        totalCapital: Money.from('124276'),
+        workingCards: [
+          card({
+            id: 1,
+            name: 'Сбер <x>',
+            icon: null,
+            balance: '124276',
+            change: change('200', '124076'),
+          }),
+        ],
+      }),
+    );
+    expect(text).toContain('🟢 Сбер &lt;x&gt;');
+    expect(text).not.toContain('Сбер <x>');
   });
 });

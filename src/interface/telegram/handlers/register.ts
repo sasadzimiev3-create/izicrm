@@ -8,12 +8,19 @@ import { handleIncoming } from '../runtime.js';
 
 function senderFrom(ctx: Context): TelegramSender {
   return {
-    async sendMessage(text: string, keyboard?: Keyboard): Promise<void> {
-      if (keyboard === undefined) {
+    async sendMessage(text: string, keyboard?: Keyboard, parseMode?: 'HTML'): Promise<void> {
+      const extra: { parse_mode?: 'HTML'; reply_markup?: ReturnType<typeof toInlineMarkup> } = {};
+      if (parseMode === 'HTML') {
+        extra.parse_mode = 'HTML';
+      }
+      if (keyboard !== undefined) {
+        extra.reply_markup = toInlineMarkup(keyboard);
+      }
+      if (extra.parse_mode === undefined && extra.reply_markup === undefined) {
         await ctx.reply(text);
         return;
       }
-      await ctx.reply(text, { reply_markup: toInlineMarkup(keyboard) });
+      await ctx.reply(text, extra);
     },
     async sendDocument(file: Buffer, filename: string): Promise<void> {
       await ctx.replyWithDocument(new InputFile(file, filename));

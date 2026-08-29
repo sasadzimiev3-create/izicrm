@@ -96,7 +96,12 @@ function balanceMap(dashboard: Dashboard): Map<CardId, Money> {
   return map;
 }
 
-async function send(sender: TelegramSender, text: string, keyboard?: Keyboard): Promise<void> {
+async function send(
+  sender: TelegramSender,
+  text: string,
+  keyboard?: Keyboard,
+  parseMode?: 'HTML',
+): Promise<void> {
   const pages = paginateText(text);
   const last = pages.length - 1;
   for (let i = 0; i < pages.length; i += 1) {
@@ -105,11 +110,29 @@ async function send(sender: TelegramSender, text: string, keyboard?: Keyboard): 
       continue;
     }
     if (i === last && keyboard !== undefined) {
-      await sender.sendMessage(page, keyboard);
+      await sender.sendMessage(page, keyboard, parseMode);
     } else {
-      await sender.sendMessage(page);
+      await sender.sendMessage(page, undefined, parseMode);
     }
   }
+}
+
+function ackCallback(
+  deps: TelegramDeps,
+  userId: UserId,
+  correlationId: string,
+  update: IncomingUpdate,
+  sender: TelegramSender,
+): Promise<void> {
+  if (update.kind !== 'callback') {
+    return Promise.resolve();
+  }
+  return sender.answerCallback().catch((error: unknown) => {
+    deps.logger.warn(
+      { userId, correlationId, updateId: update.updateId },
+      `answerCallback failed: ${String(error)}`,
+    );
+  });
 }
 
 async function loadUser(deps: TelegramDeps, telegramId: string): Promise<UserRecord> {
@@ -157,14 +180,25 @@ export async function handleIncoming(
     return;
   }
 
+  const ack = ackCallback(deps, user.id, correlationId, update, sender);
+  try {
+    await handleClaimed(deps, user, update, sender, correlationId);
+  } finally {
+    await ack;
+  }
+}
+
+async function handleClaimed(
+  deps: TelegramDeps,
+  user: UserRecord,
+  update: IncomingUpdate,
+  sender: TelegramSender,
+  correlationId: string,
+): Promise<void> {
   const now = deps.clock.now();
   const loaded = await readDialog(deps, user.id, now);
   const state = loaded.state;
   let stateRev = loaded.stateRev;
-
-  if (update.kind === 'callback') {
-    await sender.answerCallback();
-  }
 
   if (loaded.expired) {
     const { next, effects } = reduce(state, { t: 'Expired' });
@@ -725,7 +759,12 @@ async function sendHome(
   rev: number,
 ): Promise<void> {
   const dashboard = await deps.services.dashboard.getDashboard(user.id, todayOf(deps, user));
-  await send(sender, renderDashboard(dashboard), dashboardKeyboard(rev, pickerFromDashboard(dashboard)));
+  await send(
+    sender,
+    renderDashboard(dashboard),
+    dashboardKeyboard(rev, pickerFromDashboard(dashboard)),
+    'HTML',
+  );
 }
 
 async function sendPicker(

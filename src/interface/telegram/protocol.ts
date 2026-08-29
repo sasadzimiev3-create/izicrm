@@ -1,23 +1,37 @@
+export type SendParseMode = 'HTML';
+
 export type TelegramSender = {
-  sendMessage(text: string, keyboard?: import('./keyboards/keyboards.js').Keyboard): Promise<void>;
+  sendMessage(
+    text: string,
+    keyboard?: import('./keyboards/keyboards.js').Keyboard,
+    parseMode?: SendParseMode,
+  ): Promise<void>;
   sendDocument(file: Buffer, filename: string): Promise<void>;
   answerCallback(text?: string): Promise<void>;
 };
 
 export class MemorySender implements TelegramSender {
-  readonly messages: { text: string; keyboard?: import('./keyboards/keyboards.js').Keyboard }[] = [];
+  readonly messages: {
+    text: string;
+    keyboard?: import('./keyboards/keyboards.js').Keyboard;
+    parseMode?: SendParseMode;
+  }[] = [];
   readonly documents: { filename: string; buffer: Buffer }[] = [];
   readonly callbackAnswers: (string | undefined)[] = [];
 
   async sendMessage(
     text: string,
     keyboard?: import('./keyboards/keyboards.js').Keyboard,
+    parseMode?: SendParseMode,
   ): Promise<void> {
-    if (keyboard === undefined) {
-      this.messages.push({ text });
-    } else {
-      this.messages.push({ text, keyboard });
+    const message: (typeof this.messages)[number] = { text };
+    if (keyboard !== undefined) {
+      message.keyboard = keyboard;
     }
+    if (parseMode !== undefined) {
+      message.parseMode = parseMode;
+    }
+    this.messages.push(message);
   }
 
   async sendDocument(file: Buffer, filename: string): Promise<void> {

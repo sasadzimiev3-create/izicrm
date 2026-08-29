@@ -296,9 +296,16 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     const bot = new TelegramProbe(db.pool(), '619');
     await insertUser(db.pool(), '619');
     await createMaterial(bot, 'Втб2312', '10000');
-    expect(bot.last.allTexts()).toContain('🔵 Втб2312');
+    expect(bot.last.allTexts()).toContain('1) 🔵 Втб2312');
+    expect(bot.last.messages.at(-1)?.parseMode).toBe('HTML');
     expect(bot.last.allTexts()).not.toContain('Выберите стикер');
     expect(bot.last.allTexts()).not.toContain('Без стикера');
+    await bot.tapLabel('Пополнить');
+    await bot.tapLabel('Пополнить материал');
+    const picker = (bot.last.lastKeyboard ?? []).flat().map((button) => button.text).join('\n');
+    expect(picker).toContain('🔵 Втб2312');
+    await bot.tapLabel('Назад');
+    await bot.tapLabel('Назад');
     await bot.tapLabel('Настройки');
     const settings = (bot.last.lastKeyboard ?? []).flat().map((button) => button.text).join('\n');
     expect(settings).not.toContain('Переименовать');
@@ -310,7 +317,8 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     const bot = new TelegramProbe(db.pool(), '620');
     const userId = await insertUser(db.pool(), '620');
     await createMaterial(bot, 'Сбер1', '10000');
-    expect(bot.last.allTexts()).not.toContain(COPY.totalHeader);
+    expect(bot.last.allTexts()).toContain(COPY.totalHeader);
+    expect(bot.last.allTexts()).not.toContain('[💳В работе:');
 
     await bot.tapLabel('Обновить балансы');
     await bot.send('15000');
