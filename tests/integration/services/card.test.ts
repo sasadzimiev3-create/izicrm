@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ConflictError, NotFoundError } from '../../../src/domain/errors.js';
 import { parseBusinessDate } from '../../../src/domain/finance/period.js';
 import { Money } from '../../../src/domain/money/money.js';
+import { formatPercent } from '../../../src/domain/money/format.js';
 import { cardId } from '../../../src/domain/cards/card.js';
 import { insertUser, useAppDb, withUser } from '../harness.js';
 import { parseUserId } from '../../../src/infrastructure/db/ids.js';
@@ -153,6 +154,7 @@ describe('П-8 обновление в день создания', () => {
     const dash = await app.dashboard.getDashboard(userId, D('2024-08-20'));
     expect(dash.totalCapital.toFixed()).toBe('35000.00');
     expect(dash.monthly.amount.toFixed()).toBe('5000.00');
+    expect(formatPercent(dash.monthly.percent)).toBe('+16.67%');
 
     unwrap(
       await app.balanceUpdate.update(userId, {
@@ -164,6 +166,7 @@ describe('П-8 обновление в день создания', () => {
     const down = await app.dashboard.getDashboard(userId, D('2024-08-20'));
     expect(down.totalCapital.toFixed()).toBe('25000.00');
     expect(down.monthly.amount.toFixed()).toBe('-5000.00');
+    expect(formatPercent(down.monthly.percent)).toBe('\u221216.67%');
 
     const history = await app.uow.withUser(userId, (tx) =>
       app.reports.loadUserHistory(userId, D('2024-08-01'), D('2024-08-31'), tx),

@@ -73,7 +73,6 @@ export const COPY = {
   todayPrefix: 'За сегодня',
   sectionRule: '----------------------------------',
   totalLine: (amount: string) => `💰Всего: ${amount}`,
-  workingSummary: (amount: string) => `[💳В работе: ${amount}]`,
   frozenSummary: (amount: string) => `[🧊Заморожено: ${amount}]`,
   yes: 'Да',
 } as const;

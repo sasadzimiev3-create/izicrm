@@ -8,6 +8,7 @@ import { Money } from '../../../src/domain/money/money.js';
 import { percentChange } from '../../../src/domain/money/percent.js';
 import { formatCardTitle, renderDashboard } from '../../../src/interface/telegram/views/dashboard.view.js';
 import { COPY } from '../../../src/interface/telegram/views/copy.js';
+import { CARD_EMOJI, CUSTOM_EMOJI_ID, workingMarkerHtml } from '../../../src/interface/telegram/views/custom-emoji.js';
 
 const NARROW = '\u202F';
 const EM_DASH = '\u2014';
@@ -101,17 +102,26 @@ describe('UI-01 снимки главного экрана', () => {
     expect(text).toContain('+327 ₽ / +0.03%');
     expect(text).toContain('+1.07%');
     expect(text).toContain(`${COPY.todayPrefix}:`);
-    expect(text).toContain('1) 🟢 Сбер 7121*');
-    expect(text).toContain('2) 🔵 Втб 0134*');
-    expect(text).toContain('3) 🔴 Альфа 7131*');
+    expect(text).not.toMatch(/^\d+\) /m);
+    expect(text).toContain('Сбер 7121*');
+    expect(text).toContain('Втб 0134*');
+    expect(text).toContain('Альфа 7131*');
+    expect(text).toContain(`emoji-id="${CUSTOM_EMOJI_ID.sber}"`);
+    expect(text).toContain(`emoji-id="${CUSTOM_EMOJI_ID.vtb}"`);
+    expect(text).toContain(`emoji-id="${CUSTOM_EMOJI_ID.alfa}"`);
+    expect(text).toContain(`emoji-id="${CUSTOM_EMOJI_ID.working}"`);
+    expect(text).toContain(`emoji-id="${CUSTOM_EMOJI_ID.month}"`);
+    expect(text).toContain(`emoji-id="${CUSTOM_EMOJI_ID.today}"`);
     expect(text).toContain(`<u><b>${COPY.totalLine(`1${NARROW}000${NARROW}327 ₽`)}</b></u>`);
     expect(text).toContain(`<u>${COPY.workingHeader}</u>`);
     expect(text).toContain(`<u>${COPY.frozenHeader}</u>`);
     expect(text).toContain(COPY.sectionRule);
     expect(COPY.sectionRule).toHaveLength(34);
     expect(text).toContain(`[+200 ₽ / +0.16%]`);
-    const workingIdx = text.split('\n').indexOf(`<u>${COPY.workingHeader}</u>`);
-    expect(text.split('\n')[workingIdx + 1]).toMatch(/^1\) 🟢 Сбер/);
+    const lines = text.split('\n');
+    const workingIdx = lines.findIndex((line) => line.includes(`<u>${COPY.workingHeader}</u>`));
+    expect(lines[workingIdx + 1]).toContain('Сбер 7121*');
+    expect(lines[workingIdx + 1]).not.toMatch(/^\d+\)/);
     expect(text.indexOf('За Август:')).toBeLessThan(text.indexOf(`${COPY.todayPrefix}:`));
     expect(text).toMatchSnapshot();
   });
@@ -126,7 +136,7 @@ describe('UI-01 снимки главного экрана', () => {
       }),
     );
     expect(text).toContain(COPY.totalLine(`681${NARROW}466 ₽`));
-    expect(text).not.toContain('[💳В работе:');
+    expect(text).not.toContain(`[${workingMarkerHtml()}В работе:`);
     expect(text).not.toContain(COPY.frozenHeader);
   });
 
@@ -182,10 +192,11 @@ describe('UI-01 снимки главного экрана', () => {
       }),
     );
     expect(allFrozen).toContain(`0 ₽`);
-    expect(allFrozen).toContain('1) 🔴 Альфа 7131*');
-    expect(allFrozen.split('\n')).not.toContain(COPY.workingHeader);
+    expect(allFrozen).toContain('Альфа 7131*');
+    expect(allFrozen).not.toMatch(/^\d+\) /m);
+    expect(allFrozen).not.toContain(`<u>${COPY.workingHeader}</u>`);
     const frozenIdx = allFrozen.split('\n').indexOf(`<u>${COPY.frozenHeader}</u>`);
-    expect(allFrozen.split('\n')[frozenIdx + 1]).toMatch(/^1\) 🔴 Альфа/);
+    expect(allFrozen.split('\n')[frozenIdx + 1]).toContain('Альфа 7131*');
     expect(allFrozen).toMatchSnapshot();
   });
 });
@@ -246,6 +257,20 @@ describe('вёрстка строки материала', () => {
     expect(formatCardTitle('Втб2312')).toBe('🔵 Втб2312');
     expect(formatCardTitle('Альфа-Банк')).toBe('🔴 Альфа-Банк');
     expect(formatCardTitle('Тинькофф')).toBe('🟡 Тинькофф');
+    expect(formatCardTitle('ОТП')).toBe('🟠 ОТП');
+    expect(formatCardTitle('Газпром')).toBe(`${CARD_EMOJI} Газпром`);
+  });
+
+  it('месячный блок есть, даже если дневной P&L ещё «—»', () => {
+    const text = renderDashboard(
+      dashboard({
+        daily: { defined: false, reason: 'NO_PREVIOUS_DATA' },
+      }),
+    );
+    expect(text).toContain('За Август:');
+    expect(text).toContain('+10 562 ₽ / +1.07%');
+    expect(text).toContain(`${COPY.todayPrefix}:`);
+    expect(text).toContain(EM_DASH);
   });
 
   it('имя с HTML-символами экранируется', () => {
@@ -266,7 +291,60 @@ describe('вёрстка строки материала', () => {
         ],
       }),
     );
-    expect(text).toContain('🟢 Сбер &lt;x&gt;');
+    expect(text).toContain('Сбер &lt;x&gt;');
     expect(text).not.toContain('Сбер <x>');
+  });
+
+  it('неизвестный банк — обычный 💳, без custom emoji банка', () => {
+    const text = renderDashboard(
+      dashboard({
+        frozenCapital: Money.zero(),
+        frozenCards: [],
+        workingCapital: Money.from('124276'),
+        totalCapital: Money.from('124276'),
+        workingCards: [
+          card({
+            id: 1,
+            name: 'Наличные',
+            icon: null,
+            balance: '124276',
+            change: change('200', '124076'),
+          }),
+        ],
+      }),
+    );
+    expect(text).toContain(`${CARD_EMOJI} Наличные`);
+    expect(text).not.toContain(`emoji-id="${CUSTOM_EMOJI_ID.sber}"`);
+    expect(text).toContain(`emoji-id="${CUSTOM_EMOJI_ID.working}"`);
+  });
+
+  it('ОТП и Тинькофф получают свои custom emoji', () => {
+    const text = renderDashboard(
+      dashboard({
+        frozenCapital: Money.zero(),
+        frozenCards: [],
+        workingCapital: Money.from('100'),
+        totalCapital: Money.from('100'),
+        workingCards: [
+          card({
+            id: 1,
+            name: 'ОТП 11',
+            icon: null,
+            balance: '50',
+            change: change('0', '50'),
+          }),
+          card({
+            id: 2,
+            name: 'Тинькофф',
+            icon: null,
+            balance: '50',
+            change: change('0', '50'),
+          }),
+        ],
+      }),
+    );
+    expect(text).toContain(`emoji-id="${CUSTOM_EMOJI_ID.otp}"`);
+    expect(text).toContain(`emoji-id="${CUSTOM_EMOJI_ID.tbank}"`);
+    expect(text).not.toMatch(/^\d+\) /m);
   });
 });

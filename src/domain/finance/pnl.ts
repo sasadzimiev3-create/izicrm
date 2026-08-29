@@ -97,7 +97,8 @@ export function dailyPnl(ledger: Ledger, date: BusinessDate): DailyPnl {
 /**
  * Месячный P&L: `S` — 1-е число, `E = min(конец месяца, последняя запись)`.
  * Если последняя запись раньше месяца, `E` — конец месяца (LOCF, потоков нет).
- * База — закрытие последнего дня предыдущего месяца (C-4).
+ * Сумма — `periodPnl` от закрытия предыдущего месяца (C-4).
+ * Если `Cap(S − 1) ≤ 0` (учёт начат в этом месяце), процент — к депозитам месяца (C-15).
  *
  * @see docs/financial-model.md §5.3
  */
@@ -107,7 +108,14 @@ export function monthlyPnl(ledger: Ledger, year: number, month: number): PeriodP
   const end = monthEnd(year, month);
   const last = lastEntryDate(indexed);
   const to = last === undefined ? end : clipMonthEnd(start, end, last);
-  return periodPnl(indexed, start, to);
+  const pnl = periodPnl(indexed, start, to);
+  if (pnl.percent.defined) {
+    return pnl;
+  }
+  return {
+    ...pnl,
+    percent: percentChange(pnl.amount, netDeposits(indexed, start, to)),
+  };
 }
 
 function clipMonthEnd(start: BusinessDate, end: BusinessDate, last: BusinessDate): BusinessDate {

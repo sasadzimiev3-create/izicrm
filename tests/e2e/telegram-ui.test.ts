@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { encodeCallback } from '../../src/interface/telegram/keyboards/callback-data.js';
 import { COPY } from '../../src/interface/telegram/views/copy.js';
+import { CUSTOM_EMOJI_ID, workingMarkerHtml } from '../../src/interface/telegram/views/custom-emoji.js';
 import { parseCallbackData } from '../../src/interface/telegram/keyboards/callback-data.js';
 import { insertUser, useAppDb, withUser } from '../integration/harness.js';
 
@@ -296,7 +297,9 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     const bot = new TelegramProbe(db.pool(), '619');
     await insertUser(db.pool(), '619');
     await createMaterial(bot, 'Втб2312', '10000');
-    expect(bot.last.allTexts()).toContain('1) 🔵 Втб2312');
+    expect(bot.last.allTexts()).toContain('Втб2312');
+    expect(bot.last.allTexts()).not.toMatch(/^\d+\) /m);
+    expect(bot.last.allTexts()).toContain(CUSTOM_EMOJI_ID.vtb);
     expect(bot.last.messages.at(-1)?.parseMode).toBe('HTML');
     expect(bot.last.allTexts()).not.toContain('Выберите стикер');
     expect(bot.last.allTexts()).not.toContain('Без стикера');
@@ -318,7 +321,7 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     const userId = await insertUser(db.pool(), '620');
     await createMaterial(bot, 'Сбер1', '10000');
     expect(bot.last.allTexts()).toContain(COPY.totalHeader);
-    expect(bot.last.allTexts()).not.toContain('[💳В работе:');
+    expect(bot.last.allTexts()).not.toContain(`[${workingMarkerHtml()}В работе:`);
 
     await bot.tapLabel('Обновить балансы');
     await bot.send('15000');

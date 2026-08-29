@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getBankEmoji } from '../../../src/domain/cards/bank-emoji.js';
+import { detectBankKind, getBankEmoji } from '../../../src/domain/cards/bank-emoji.js';
 
 describe('getBankEmoji', () => {
   it('Сбер и Сбербанк — зелёный, в том числе как подстрока', () => {
@@ -42,11 +42,17 @@ describe('getBankEmoji', () => {
     expect(getBankEmoji('Тестовая')).not.toBe('🟡');
   });
 
-  it('прочие названия — серый или коричневый круг, стабильно', () => {
-    const gazprom = getBankEmoji('Газпром');
-    expect(['⚪', '🟤']).toContain(gazprom);
-    expect(getBankEmoji('Газпром')).toBe(gazprom);
-    expect(['⚪', '🟤']).toContain(getBankEmoji('Наличные'));
-    expect(['⚪', '🟤']).toContain(getBankEmoji('Райффайзен'));
+  it('ОТП / OTP — оранжевый', () => {
+    expect(getBankEmoji('ОТП')).toBe('🟠');
+    expect(getBankEmoji('ОТП Банк')).toBe('🟠');
+    expect(detectBankKind('otp 4455')).toBe('otp');
+    expect(detectBankKind('OTP Bank')).toBe('otp');
+  });
+
+  it('прочие названия — 💳', () => {
+    expect(getBankEmoji('Газпром')).toBe('💳');
+    expect(getBankEmoji('Наличные')).toBe('💳');
+    expect(getBankEmoji('Райффайзен')).toBe('💳');
+    expect(detectBankKind('')).toBe('other');
   });
 });

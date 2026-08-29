@@ -6,6 +6,12 @@ import type { PercentResult } from '../../../domain/money/percent.js';
 import type { CardBalanceChange } from '../../../domain/finance/card-change.js';
 
 import { COPY } from './copy.js';
+import {
+  bankMarkerHtml,
+  monthMarkerHtml,
+  todayMarkerHtml,
+  workingMarkerHtml,
+} from './custom-emoji.js';
 import { formatDayMonth, formatDaysSuffix, formatMonthTitle } from './dates.js';
 
 const EM_DASH = '\u2014';
@@ -48,7 +54,7 @@ function dailyTitle(dashboard: Dashboard): string {
   }
   const head = last === dashboard.today ? COPY.todayPrefix : `За ${formatDayMonth(last)}`;
   const suffix = dashboard.daily.defined ? formatDaysSuffix(dashboard.daily.periodDays) : '';
-  return `${head}${suffix}:`;
+  return `${todayMarkerHtml()}${head}${suffix}:`;
 }
 
 function dailyValue(dashboard: Dashboard): string {
@@ -58,24 +64,19 @@ function dailyValue(dashboard: Dashboard): string {
   return formatPnlLine(dashboard.daily.amount, dashboard.daily.percent);
 }
 
-function renderCardBlock(card: DashboardCard, index: number): string {
+function renderCardBlock(card: DashboardCard): string {
   const change = formatCardChange(card.change);
-  const title = `${getBankEmoji(card.name)} ${escapeHtml(card.name)}`;
-  return `${String(index)}) ${title} ${EM_DASH} ${formatMoney(card.balance)}\n[${change}]`;
+  const title = `${bankMarkerHtml(card.name)} ${escapeHtml(card.name)}`;
+  return `${title} ${EM_DASH} ${formatMoney(card.balance)}\n[${change}]`;
 }
 
-function renderCardList(
-  cards: DashboardCard[],
-  startIndex: number,
-): { lines: string[]; nextIndex: number } {
+function renderCardList(cards: DashboardCard[]): string[] {
   const lines: string[] = [];
-  let index = startIndex;
   for (const card of cards) {
-    lines.push(renderCardBlock(card, index));
+    lines.push(renderCardBlock(card));
     lines.push('');
-    index += 1;
   }
-  return { lines, nextIndex: index };
+  return lines;
 }
 
 function hasFrozen(dashboard: Dashboard): boolean {
@@ -84,7 +85,7 @@ function hasFrozen(dashboard: Dashboard): boolean {
 
 /**
  * Главный экран. Чистая функция, без арифметики.
- * Жирный/подчёркивание — Telegram HTML (`parse_mode: HTML`).
+ * Жирный/подчёркивание и custom emoji — Telegram HTML (`parse_mode: HTML`).
  *
  * @see docs/telegram-flows.md §1
  */
@@ -102,12 +103,12 @@ export function renderDashboard(dashboard: Dashboard): string {
   lines.push(boldUnderline(COPY.totalLine(formatMoney(dashboard.totalCapital))));
   if (hasFrozen(dashboard)) {
     lines.push('');
-    lines.push(COPY.workingSummary(formatMoney(dashboard.workingCapital)));
+    lines.push(`[${workingMarkerHtml()}В работе: ${formatMoney(dashboard.workingCapital)}]`);
     lines.push(COPY.frozenSummary(formatMoney(dashboard.frozenCapital)));
   }
   lines.push(COPY.sectionRule);
 
-  lines.push(`За ${formatMonthTitle(dashboard.today)}:`);
+  lines.push(`${monthMarkerHtml()}За ${formatMonthTitle(dashboard.today)}:`);
   lines.push(formatPnlLine(dashboard.monthly.amount, dashboard.monthly.percent));
 
   const title = dailyTitle(dashboard);
@@ -125,18 +126,14 @@ export function renderDashboard(dashboard: Dashboard): string {
 
   lines.push(COPY.sectionRule);
 
-  let index = 1;
   if (dashboard.workingCards.length > 0) {
-    lines.push(underline(COPY.workingHeader));
-    const rendered = renderCardList(dashboard.workingCards, index);
-    lines.push(...rendered.lines);
-    index = rendered.nextIndex;
+    lines.push(`${workingMarkerHtml()}${underline(COPY.workingHeader)}`);
+    lines.push(...renderCardList(dashboard.workingCards));
   }
 
   if (hasFrozen(dashboard)) {
     lines.push(underline(COPY.frozenHeader));
-    const rendered = renderCardList(dashboard.frozenCards, index);
-    lines.push(...rendered.lines);
+    lines.push(...renderCardList(dashboard.frozenCards));
   }
 
   return lines.join('\n').trimEnd();

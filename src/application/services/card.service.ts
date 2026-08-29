@@ -19,7 +19,7 @@ export function assertCardName(name: string): void {
 
 /**
  * Создание карты. Стартовый баланс — всегда депозит (C-29).
- * Маркер банка считается из названия в UI (`getBankEmoji`), поле `icon` не пишется.
+ * Маркер банка считается из названия в UI (`detectBankKind`), поле `icon` не пишется.
  */
 export class CardService {
   constructor(private readonly deps: ServiceDeps) {}

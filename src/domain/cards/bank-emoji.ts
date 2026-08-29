@@ -1,15 +1,17 @@
 /**
- * Цветной маркер банка по названию материала.
- * Подстрока, регистр, дефис и пробелы не важны: «Втб2312» → 🔵.
+ * Банк по названию материала.
+ * Подстрока, регистр, дефис и пробелы не важны: «Втб2312» → vtb.
  *
- * Неизвестные банки — ⚪ или 🟤, выбор стабилен для одного и того же названия.
+ * Неизвестные банки — 💳. Ручного выбора нет (C-20).
  */
+export type BankKind = 'sber' | 'vtb' | 'alfa' | 'otp' | 'tbank' | 'other';
+
 const GREEN = '🟢';
 const YELLOW = '🟡';
 const BLUE = '🔵';
 const RED = '🔴';
-const GRAY = '⚪';
-const BROWN = '🟤';
+const ORANGE = '🟠';
+const CARD = '\u{1F4B3}';
 
 function foldName(name: string): string {
   return name.toLowerCase().replaceAll('ё', 'е');
@@ -39,31 +41,39 @@ function isTBank(spaced: string, compact: string): boolean {
   return /^(?:т|t)\d/.test(compact);
 }
 
-function otherBankEmoji(name: string): typeof GRAY | typeof BROWN {
-  let hash = 0;
-  for (const ch of name) {
-    hash = (hash * 31 + (ch.codePointAt(0) ?? 0)) | 0;
-  }
-  return (hash & 1) === 0 ? GRAY : BROWN;
-}
-
-export function getBankEmoji(bankName: string): string {
+export function detectBankKind(bankName: string): BankKind {
   const spaced = spacedName(foldName(bankName));
   const compact = compactName(spaced);
   if (compact.length === 0) {
-    return otherBankEmoji(bankName);
+    return 'other';
   }
   if (/альфа|alfa|alpha/.test(compact)) {
-    return RED;
+    return 'alfa';
   }
   if (/сбер|sber/.test(compact)) {
-    return GREEN;
+    return 'sber';
   }
   if (/втб|vtb/.test(compact)) {
-    return BLUE;
+    return 'vtb';
+  }
+  if (/отп|otp/.test(compact)) {
+    return 'otp';
   }
   if (isTBank(spaced, compact)) {
-    return YELLOW;
+    return 'tbank';
   }
-  return otherBankEmoji(bankName);
+  return 'other';
+}
+
+const KIND_EMOJI: Record<BankKind, string> = {
+  sber: GREEN,
+  vtb: BLUE,
+  alfa: RED,
+  otp: ORANGE,
+  tbank: YELLOW,
+  other: CARD,
+};
+
+export function getBankEmoji(bankName: string): string {
+  return KIND_EMOJI[detectBankKind(bankName)];
 }

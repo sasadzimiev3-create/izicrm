@@ -157,6 +157,15 @@ describe('примеры П-1…П-8', () => {
     expectMoney(monthlyPnl(ledger, 2024, 8).amount, '5000');
   });
 
+  it('FT-07d: старт в середине месяца — месячный процент к депозитам, не «—»', () => {
+    const card = makeCard({ id: 1, createdOn: '2024-08-20' });
+    const ledger = makeLedger([card], [makeEntry(1, '2024-08-20', '35000', '30000')]);
+    const monthly = monthlyPnl(ledger, 2024, 8);
+    expectMoney(monthly.amount, '5000');
+    expectMoney(monthly.openingCapital, '0');
+    expect(formatPercent(monthly.percent)).toBe('+16.67%');
+  });
+
   it('FT-07c / П-3б: обновление и пополнение в один день', () => {
     const { ledger, today } = twoDay('80000', '95000', '10000');
     const daily = dailyPnl(ledger, today);
