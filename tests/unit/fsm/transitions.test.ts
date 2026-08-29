@@ -138,4 +138,26 @@ describe('FSM reduce — без Telegram', () => {
       true,
     );
   });
+
+  it('после последней карты в очереди показывает главный экран, не сводку', () => {
+    const state = {
+      t: 'BalanceUpdateAmount' as const,
+      queue: [C(1)],
+      index: 0,
+      businessDate: D('2024-08-20'),
+      done: [],
+    };
+    const entered = reduce(state, {
+      t: 'AmountEntered',
+      amount: '1000.00',
+      name: 'Сбер',
+      previous: '500.00',
+    });
+    expect(entered.next).toEqual(IDLE);
+    expect(entered.effects.map((effect) => effect.t)).toEqual(['ApplyUpdate', 'ShowHome']);
+
+    const skipped = reduce(state, { t: 'Skip', name: 'Сбер', previous: '500.00' });
+    expect(skipped.next).toEqual(IDLE);
+    expect(skipped.effects).toEqual([{ t: 'ShowHome' }]);
+  });
 });

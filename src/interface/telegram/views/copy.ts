@@ -43,9 +43,6 @@ export const COPY = {
   updateBalance: 'Обновить баланс',
   promptUpdate: (name: string, index: number, total: number, previous: string) =>
     `${name}  (${index} из ${total})\nПредыдущий баланс: ${previous}\n\nВведите текущий баланс:`,
-  updateSummaryTitle: (count: number, date: string) =>
-    `Обновлено ${String(count)} ${pluralMaterials(count)} · ${date}`,
-  skippedLine: (count: number) => `Пропущено: ${String(count)}`,
   settingsTitle: 'Настройки',
   report: 'Отчёт в Excel',
   deleteMaterial: 'Удалить материал',
@@ -76,21 +73,6 @@ export const COPY = {
   frozenSummary: (amount: string) => `[🧊Заморожено: ${amount}]`,
   yes: 'Да',
 } as const;
-
-export function pluralMaterials(count: number): string {
-  const n = Math.abs(count) % 100;
-  const n1 = n % 10;
-  if (n > 10 && n < 20) {
-    return 'материалов';
-  }
-  if (n1 === 1) {
-    return 'материал';
-  }
-  if (n1 >= 2 && n1 <= 4) {
-    return 'материала';
-  }
-  return 'материалов';
-}
 
 export function pluralDays(count: number): string {
   const n = Math.abs(count) % 100;

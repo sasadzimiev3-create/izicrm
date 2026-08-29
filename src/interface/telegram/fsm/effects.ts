@@ -1,7 +1,7 @@
 import type { CardId } from '../../../domain/cards/card.js';
 import type { BusinessDate } from '../../../domain/finance/period.js';
 
-import type { DialogState, UpdatedCard } from './states.js';
+import type { DialogState } from './states.js';
 
 /**
  * Намерения рантайма. Арифметики нет: сервис и view вызываются снаружи.
@@ -30,7 +30,6 @@ export type Effect =
   | { t: 'ApplyUnfreeze'; cardId: CardId }
   | { t: 'PromptUpdate' }
   | { t: 'ApplyUpdate'; cardId: CardId; amount: string; businessDate: BusinessDate }
-  | { t: 'ShowUpdateSummary'; done: UpdatedCard[]; businessDate: BusinessDate }
   | { t: 'ShowArchiveList' }
   | { t: 'PromptArchiveConfirm'; cardId: CardId }
   | { t: 'PromptDisposition'; name: string; remainder: string }

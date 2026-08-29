@@ -96,7 +96,7 @@ src/
                      card-archive.ts  card-topup.ts  card-freeze.ts  card-spend.ts
                      balance-update.ts  report.ts
     keyboards/       callback-data.ts  keyboards.ts
-    views/           dashboard.view.ts  cards.view.ts  update.view.ts
+    views/           dashboard.view.ts  cards.view.ts
   config/            env.ts  clock.ts
   main.ts
 migrations/          NNN_*.sql

@@ -12,7 +12,6 @@ import type { BusinessDate } from '../../domain/finance/period.js';
 import { parseAmount } from '../../domain/money/parse.js';
 import { Money } from '../../domain/money/money.js';
 import { formatMoney } from '../../domain/money/format.js';
-import { percentChange } from '../../domain/money/percent.js';
 import type { UserRecord } from '../../application/ports/user-repository.js';
 import type { Dashboard } from '../../application/dto/dashboard.js';
 import type { DbTx } from '../../application/ports/unit-of-work.js';
@@ -44,7 +43,6 @@ import type { IncomingUpdate, TelegramSender } from './protocol.js';
 import { COPY } from './views/copy.js';
 import { renderArchivedList, renderFrozenCard } from './views/cards.view.js';
 import { paginateText, renderDashboard } from './views/dashboard.view.js';
-import { renderUpdateSummary } from './views/update.view.js';
 import type { CardRow } from '../../application/ports/card-repository.js';
 import { isStartCommand } from './handlers/start.js';
 
@@ -698,9 +696,6 @@ async function runEffect(
         businessDate: effect.businessDate,
       });
       return;
-    case 'ShowUpdateSummary':
-      await sendUpdateSummary(deps, user, sender, effect.done, effect.businessDate, rev);
-      return;
     case 'PromptArchiveConfirm': {
       const preview = await deps.services.archive.preview(user.id, effect.cardId, today);
       const text = preview.needsDisposition
@@ -917,51 +912,6 @@ async function sendUpdatePrompt(
     sender,
     COPY.promptUpdate(locf.card.name, state.index + 1, state.queue.length, formatMoney(locf.amount)),
     updatePromptKeyboard(rev),
-  );
-}
-
-async function sendUpdateSummary(
-  deps: TelegramDeps,
-  user: UserRecord,
-  sender: TelegramSender,
-  done: import('./fsm/states.js').UpdatedCard[],
-  date: BusinessDate,
-  rev: number,
-): Promise<void> {
-  const dashboard = await deps.services.dashboard.getDashboard(user.id, date);
-  const skipped = done.filter((row) => row.skipped).length;
-  const rows = done
-    .filter((row) => !row.skipped)
-    .map((row) => {
-      const card =
-        dashboard.workingCards.find((item) => item.id === row.cardId) ??
-        dashboard.frozenCards.find((item) => item.id === row.cardId);
-      const amount = card?.balance ?? Money.from(row.amount);
-      const previous = Money.from(row.previous);
-      const delta = amount.minus(previous);
-      return {
-        name: row.name,
-        amount,
-        change: {
-          defined: true as const,
-          amount: delta,
-          percent: percentChange(delta, previous),
-        },
-      };
-    });
-  const dailyAmount = dashboard.daily.defined ? dashboard.daily.amount : dashboard.monthly.amount;
-  const dailyPercent = dashboard.daily.defined ? dashboard.daily.percent : dashboard.monthly.percent;
-  await send(
-    sender,
-    renderUpdateSummary({
-      date,
-      total: dashboard.totalCapital,
-      dailyAmount,
-      dailyPercent,
-      rows,
-      skipped,
-    }),
-    dashboardKeyboard(rev, pickerFromDashboard(dashboard)),
   );
 }
 

@@ -326,6 +326,9 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     await bot.tapLabel('Обновить балансы');
     await bot.send('15000');
     expect(bot.last.allTexts()).toContain(`+5${'\u202F'}000 ₽`);
+    expect(bot.last.allTexts()).toContain(COPY.totalHeader);
+    expect(bot.last.allTexts()).not.toMatch(/Обновлено \d+/);
+    expect(bot.last.messages.at(-1)?.parseMode).toBe('HTML');
 
     const afterUp = await withUser(db.pool(), userId, async (client) => {
       const result = await client.query<{ amount: string; capital_in: string }>(

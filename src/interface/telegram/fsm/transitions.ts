@@ -22,13 +22,8 @@ function nextUpdate(
   apply: Effect | null,
 ): ReduceResult {
   const index = state.index + 1;
-  const summary: Effect = {
-    t: 'ShowUpdateSummary',
-    done,
-    businessDate: state.businessDate,
-  };
   if (index >= state.queue.length) {
-    return result(IDLE, ...(apply === null ? [] : [apply]), summary);
+    return result(IDLE, ...(apply === null ? [] : [apply]), { t: 'ShowHome' });
   }
   return result(
     { ...state, index, done },
