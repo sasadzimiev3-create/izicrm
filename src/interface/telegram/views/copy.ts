@@ -1,4 +1,4 @@
-/** Тексты интерфейса. Банковский термин из C-18 здесь запрещён (FR-6.7). */
+/** Тексты интерфейса. Сущность — «материал» (C-18, FR-6.7). */
 
 export const COPY = {
   notFound: 'Материал не найден',
@@ -12,8 +12,8 @@ export const COPY = {
   cancel: 'Отмена',
   back: 'Назад',
   skip: 'Пропустить',
-  newCard: 'новый',
-  promptName: 'Введите название материала:',
+  promptName:
+    'Введите название материала:\nВведите последние 4 цифры карты\n(чтобы понимать, где какая карта)',
   promptBalance: (name: string) => `${name}\nВведите текущий баланс:`,
   createHint:
     'Эта сумма — точка отсчёта, прибылью не считается.\nПрибыль появится, когда обновите баланс.',
@@ -64,13 +64,13 @@ export const COPY = {
   reportWait: 'Готовлю отчёт…',
   reportRateLimit: 'Отчёт можно запросить не чаще одного раза в минуту.',
   reportUnavailable: 'Отчёт пока недоступен.',
-  workingHeader: 'В работе:',
+  workingHeader: 'Материал',
   frozenHeader: 'Заморожено:',
   totalHeader: 'Всего:',
   todayPrefix: 'За сегодня',
   sectionRule: '----------------------------------',
   totalLine: (amount: string) => `💰Всего: ${amount}`,
-  workingSummary: (amount: string) => `<b>В работе:</b> ${amount}`,
+  workingSummary: (amount: string) => `В работе: ${amount}`,
   frozenSummary: (amount: string) => `🧊Заморожено: ${amount}`,
   yes: 'Да',
 } as const;

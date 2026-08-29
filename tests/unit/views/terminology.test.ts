@@ -14,13 +14,17 @@ function walk(dir: string): string[] {
 }
 
 describe('терминология интерфейса (C-18, FR-6.7)', () => {
-  it('в views нет слова «карта»; в именах типов нет Material', () => {
+  it('в views нет слова «карта», кроме подсказки про 4 цифры носителя; в именах типов нет Material', () => {
     const files = walk(ROOT).filter((path) => path.endsWith('.ts'));
     expect(files.length).toBeGreaterThan(0);
     for (const file of files) {
       const source = readFileSync(file, 'utf8');
-      if (file.includes(`${join('views')}`) || file.endsWith(`${join('copy.ts')}`)) {
-        expect(source, file).not.toMatch(/карт/i);
+      const inViews = file.includes(`${join('views')}`) || file.endsWith(`${join('copy.ts')}`);
+      if (inViews) {
+        const withoutLastFourHint = source
+          .replaceAll('Введите последние 4 цифры карты', '')
+          .replaceAll('где какая карта', '');
+        expect(withoutLastFourHint, file).not.toMatch(/карт/i);
       }
       expect(source, file).not.toMatch(/\bMaterial\b/);
     }

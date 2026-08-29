@@ -22,8 +22,16 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
   it('UI-05: полный проход создания; на главном четыре кнопки (FR-6.2)', async () => {
     const bot = new TelegramProbe(db.pool(), '601');
     await insertUser(db.pool(), '601');
-    await createMaterial(bot, 'Сбер1', '10000');
+    await bot.send('/start');
+    await bot.tapLabel(COPY.topUpMenu);
+    await bot.tapLabel('Добавить материал');
+    expect(bot.last.lastText).toBe(COPY.promptName);
+    expect(COPY.promptName).toContain('Введите название материала:');
+    expect(COPY.promptName).toContain('последние 4 цифры карты');
+    await bot.send('Сбер1');
+    await bot.send('10000');
     expect(bot.last.allTexts()).toContain('Сбер1');
+    expect(bot.last.allTexts()).not.toContain('новый');
     expect(bot.last.allTexts()).not.toMatch(/просто прибыль|это прибыль|PROFIT/i);
     const labels = (bot.last.lastKeyboard ?? []).map((row) => row.map((button) => button.text).join());
     expect(labels.some((text) => text.includes('Обновить балансы'))).toBe(true);
