@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { encodeCallback } from '../../src/interface/telegram/keyboards/callback-data.js';
 import { COPY } from '../../src/interface/telegram/views/copy.js';
-import { CUSTOM_EMOJI_ID, workingMarkerHtml } from '../../src/interface/telegram/views/custom-emoji.js';
+import { CUSTOM_EMOJI_ID } from '../../src/interface/telegram/views/custom-emoji.js';
 import { parseCallbackData } from '../../src/interface/telegram/keyboards/callback-data.js';
 import { insertUser, useAppDb, withUser } from '../integration/harness.js';
 
@@ -10,7 +10,7 @@ import { TelegramProbe } from './probe.js';
 
 async function createMaterial(bot: TelegramProbe, name: string, amount: string): Promise<void> {
   await bot.send('/start');
-  await bot.tapLabel('Пополнить');
+  await bot.tapLabel(COPY.topUpMenu);
   await bot.tapLabel('Добавить материал');
   await bot.send(name);
   await bot.send(amount);
@@ -27,20 +27,20 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     expect(bot.last.allTexts()).not.toMatch(/просто прибыль|это прибыль|PROFIT/i);
     const labels = (bot.last.lastKeyboard ?? []).map((row) => row.map((button) => button.text).join());
     expect(labels.some((text) => text.includes('Обновить балансы'))).toBe(true);
-    expect(labels.some((text) => text.includes('Пополнить'))).toBe(true);
-    expect(labels.some((text) => text.includes('Расход'))).toBe(true);
+    expect(labels.some((text) => text.includes(COPY.topUpMenu))).toBe(true);
+    expect(labels.some((text) => text.includes(COPY.expenseMenu))).toBe(true);
     expect(labels.some((text) => text.includes('Настройки'))).toBe(true);
-    const topUp = (bot.last.lastKeyboard ?? []).flat().find((button) => button.text === 'Пополнить');
-    const spend = (bot.last.lastKeyboard ?? []).flat().find((button) => button.text === 'Расход');
+    const topUp = (bot.last.lastKeyboard ?? []).flat().find((button) => button.text === COPY.topUpMenu);
+    const spend = (bot.last.lastKeyboard ?? []).flat().find((button) => button.text === COPY.expenseMenu);
     expect(topUp?.style).toBe('success');
     expect(spend?.style).toBe('danger');
-    expect(topUp?.text).toBe('Пополнить');
-    expect(spend?.text).toBe('Расход');
+    expect(topUp?.text).toBe(COPY.topUpMenu);
+    expect(spend?.text).toBe(COPY.expenseMenu);
     expect(
       (bot.last.lastKeyboard ?? []).some(
         (row) =>
-          row.some((button) => button.text.includes('Пополнить')) &&
-          row.some((button) => button.text.includes('Расход')),
+          row.some((button) => button.text.includes(COPY.topUpMenu)) &&
+          row.some((button) => button.text.includes(COPY.expenseMenu)),
       ),
     ).toBe(true);
     expect((bot.last.lastKeyboard ?? []).flat().some((button) => button.text.includes('Сбер1'))).toBe(
@@ -55,7 +55,7 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     await createMaterial(bot, 'Альфа', '1000');
     await createMaterial(bot, 'Бета', '2000');
     await createMaterial(bot, 'Гамма', '3000');
-    await bot.tapLabel('Расход');
+    await bot.tapLabel(COPY.expenseMenu);
     await bot.tapLabel('Заблокировать');
     await bot.tapLabel('Гамма');
     await bot.tapLabel('Обновить балансы');
@@ -209,7 +209,7 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     const bot = new TelegramProbe(db.pool(), '615');
     const userId = await insertUser(db.pool(), '615');
     await createMaterial(bot, 'Сбер1', '80000');
-    await bot.tapLabel('Пополнить');
+    await bot.tapLabel(COPY.topUpMenu);
     await bot.tapLabel('Пополнить материал');
     await bot.tapLabel('Сбер1');
     await bot.send('80000');
@@ -232,12 +232,12 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     const bot = new TelegramProbe(db.pool(), '616');
     await insertUser(db.pool(), '616');
     await createMaterial(bot, 'Альфа', '318861');
-    await bot.tapLabel('Расход');
+    await bot.tapLabel(COPY.expenseMenu);
     await bot.tapLabel('Заблокировать');
     await bot.tapLabel('Альфа');
     expect(bot.last.allTexts()).toContain('заморожен');
     expect(bot.last.allTexts()).toContain(COPY.frozenHeader);
-    await bot.tapLabel('Расход');
+    await bot.tapLabel(COPY.expenseMenu);
     await bot.tapLabel('Вернуть в оборот');
     await bot.tapLabel('Альфа');
     await bot.tapLabel('Вернуть в оборот');
@@ -248,7 +248,7 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     const bot = new TelegramProbe(db.pool(), '617');
     const userId = await insertUser(db.pool(), '617');
     await createMaterial(bot, 'Сбер1', '80000');
-    await bot.tapLabel('Расход');
+    await bot.tapLabel(COPY.expenseMenu);
     await bot.tapLabel('Потратил');
     await bot.tapLabel('Сбер1');
     await bot.send('80000');
@@ -274,7 +274,7 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     await insertUser(db.pool(), '618');
     await createMaterial(bot, 'Альфа', '1000');
 
-    await bot.tapLabel('Расход');
+    await bot.tapLabel(COPY.expenseMenu);
     await bot.tapLabel('Заблокировать');
     expect(bot.last.lastText).toContain(COPY.freezeWhich);
     await bot.tapLabel('Назад');
@@ -286,7 +286,7 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     expect(bot.last.lastText).toBe(COPY.expenseMenu);
 
     await bot.send('/start');
-    await bot.tapLabel('Пополнить');
+    await bot.tapLabel(COPY.topUpMenu);
     await bot.tapLabel('Пополнить материал');
     expect(bot.last.lastText).toContain(COPY.pickMaterial);
     await bot.tapLabel('Назад');
@@ -303,7 +303,7 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     expect(bot.last.messages.at(-1)?.parseMode).toBe('HTML');
     expect(bot.last.allTexts()).not.toContain('Выберите стикер');
     expect(bot.last.allTexts()).not.toContain('Без стикера');
-    await bot.tapLabel('Пополнить');
+    await bot.tapLabel(COPY.topUpMenu);
     await bot.tapLabel('Пополнить материал');
     const picker = (bot.last.lastKeyboard ?? []).flat().map((button) => button.text).join('\n');
     expect(picker).toContain('🔵 Втб2312');
@@ -321,7 +321,7 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     const userId = await insertUser(db.pool(), '620');
     await createMaterial(bot, 'Сбер1', '10000');
     expect(bot.last.allTexts()).toContain(COPY.totalHeader);
-    expect(bot.last.allTexts()).not.toContain(`[${workingMarkerHtml()}В работе:`);
+    expect(bot.last.allTexts()).not.toMatch(/<b>В работе:<\/b> /);
 
     await bot.tapLabel('Обновить балансы');
     await bot.send('15000');

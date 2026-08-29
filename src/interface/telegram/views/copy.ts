@@ -17,14 +17,14 @@ export const COPY = {
   promptBalance: (name: string) => `${name}\nВведите текущий баланс:`,
   createHint:
     'Эта сумма — точка отсчёта, прибылью не считается.\nПрибыль появится, когда обновите баланс.',
-  topUpMenu: 'Пополнить',
+  topUpMenu: 'Добавить',
   addMaterial: 'Добавить материал',
   topUpExisting: 'Пополнить материал',
   promptTopUp: (name: string, current: string) =>
     `${name}\nСейчас: ${current}\n\nВведите новый баланс:`,
   topUpDone: (delta: string, name: string, balance: string) =>
     `Пополнено на ${delta}. Прибыль не изменилась.\n${name} · ${balance}`,
-  expenseMenu: 'Расход',
+  expenseMenu: 'Вывел',
   freezePick: 'Заблокировать материал',
   spendPick: 'Потратил / вывел',
   freezeWhich: 'Какой материал заблокировать?',
@@ -70,7 +70,8 @@ export const COPY = {
   todayPrefix: 'За сегодня',
   sectionRule: '----------------------------------',
   totalLine: (amount: string) => `💰Всего: ${amount}`,
-  frozenSummary: (amount: string) => `[🧊Заморожено: ${amount}]`,
+  workingSummary: (amount: string) => `<b>В работе:</b> ${amount}`,
+  frozenSummary: (amount: string) => `🧊Заморожено: ${amount}`,
   yes: 'Да',
 } as const;
 

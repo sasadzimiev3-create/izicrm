@@ -6,12 +6,7 @@ import type { PercentResult } from '../../../domain/money/percent.js';
 import type { CardBalanceChange } from '../../../domain/finance/card-change.js';
 
 import { COPY } from './copy.js';
-import {
-  bankMarkerHtml,
-  monthMarkerHtml,
-  todayMarkerHtml,
-  workingMarkerHtml,
-} from './custom-emoji.js';
+import { bankMarkerHtml, monthMarkerHtml, todayMarkerHtml } from './custom-emoji.js';
 import { formatDayMonth, formatDaysSuffix, formatMonthTitle } from './dates.js';
 
 const EM_DASH = '\u2014';
@@ -67,7 +62,7 @@ function dailyValue(dashboard: Dashboard): string {
 function renderCardBlock(card: DashboardCard): string {
   const change = formatCardChange(card.change);
   const title = `${bankMarkerHtml(card.name)} ${escapeHtml(card.name)}`;
-  return `${title} ${EM_DASH} ${formatMoney(card.balance)}\n[${change}]`;
+  return `${title} ${EM_DASH} ${formatMoney(card.balance)}\n${change}`;
 }
 
 function renderCardList(cards: DashboardCard[]): string[] {
@@ -103,7 +98,7 @@ export function renderDashboard(dashboard: Dashboard): string {
   lines.push(boldUnderline(COPY.totalLine(formatMoney(dashboard.totalCapital))));
   if (hasFrozen(dashboard)) {
     lines.push('');
-    lines.push(`[${workingMarkerHtml()}В работе: ${formatMoney(dashboard.workingCapital)}]`);
+    lines.push(COPY.workingSummary(formatMoney(dashboard.workingCapital)));
     lines.push(COPY.frozenSummary(formatMoney(dashboard.frozenCapital)));
   }
   lines.push(COPY.sectionRule);
@@ -127,7 +122,7 @@ export function renderDashboard(dashboard: Dashboard): string {
   lines.push(COPY.sectionRule);
 
   if (dashboard.workingCards.length > 0) {
-    lines.push(`${workingMarkerHtml()}${underline(COPY.workingHeader)}`);
+    lines.push(boldUnderline(COPY.workingHeader));
     lines.push(...renderCardList(dashboard.workingCards));
   }
 
