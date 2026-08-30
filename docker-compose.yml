@@ -61,6 +61,12 @@ services:
       TZ: ${TZ:-Europe/Moscow}
       HEALTH_HOST: 127.0.0.1
       HEALTH_PORT: "8080"
+      WEB_HOST: 0.0.0.0
+      WEB_PORT: "3000"
+      WEB_PUBLIC_URL: ${WEB_PUBLIC_URL:-}
+      WEB_SESSION_SECRET: ${WEB_SESSION_SECRET:-}
+    ports:
+      - "3000:3000"
     stop_signal: SIGTERM
 
 volumes:

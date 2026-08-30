@@ -39,8 +39,8 @@
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  interface/telegram        handlers, keyboards, FSM,    │  без бизнес-логики
-│                            views (чистый рендер текста) │
+│  interface/telegram · interface/web                     │  без бизнес-логики
+│  (handlers, FSM, HTTP, рендер)                          │
 ├─────────────────────────────────────────────────────────┤
 │  application               use cases, транзакции,       │  оркестрация
 │                            ports (интерфейсы репо)      │
@@ -97,8 +97,11 @@ src/
                      balance-update.ts  report.ts
     keyboards/       callback-data.ts  keyboards.ts
     views/           dashboard.view.ts  cards.view.ts
+  interface/web/
+    auth.ts  serialize.ts  server.ts
   config/            env.ts  clock.ts
   main.ts
+web/public/          index.html  login.html  app.css  app.js
 migrations/          NNN_*.sql
 tests/               unit/  property/  integration/  security/  e2e/
 docs/

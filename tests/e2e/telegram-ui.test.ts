@@ -40,8 +40,8 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     expect(labels.some((text) => text.includes('Настройки'))).toBe(true);
     const topUp = (bot.last.lastKeyboard ?? []).flat().find((button) => button.text === COPY.topUpMenu);
     const spend = (bot.last.lastKeyboard ?? []).flat().find((button) => button.text === COPY.expenseMenu);
-    expect(topUp?.style).toBe('success');
-    expect(spend?.style).toBe('danger');
+    expect(topUp !== undefined && 'data' in topUp ? topUp.style : undefined).toBe('success');
+    expect(spend !== undefined && 'data' in spend ? spend.style : undefined).toBe('danger');
     expect(topUp?.text).toBe(COPY.topUpMenu);
     expect(spend?.text).toBe(COPY.expenseMenu);
     expect(
@@ -380,11 +380,12 @@ function firstCardId(pool: import('pg').Pool, userId: string): Promise<string> {
 }
 
 function currentRev(bot: TelegramProbe): number {
-  const first = bot.last.lastKeyboard?.[0]?.[0]?.data;
-  if (first === undefined) {
+  const first = bot.last.lastKeyboard?.[0]?.[0];
+  const data = first !== undefined && 'data' in first ? first.data : undefined;
+  if (data === undefined) {
     return 0;
   }
-  const parsed = parseCallbackData(first);
+  const parsed = parseCallbackData(data);
   return parsed.ok ? parsed.rev : 0;
 }
 

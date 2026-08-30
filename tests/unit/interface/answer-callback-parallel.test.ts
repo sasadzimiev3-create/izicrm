@@ -68,6 +68,7 @@ function makeDeps(): TelegramDeps {
     logger: createSafeLogger(() => undefined),
     report: { build: async () => Buffer.from('') },
     reportLimit: { tryAcquire: () => true },
+    webCabinet: null,
   };
 }
 

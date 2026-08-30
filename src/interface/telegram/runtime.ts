@@ -36,6 +36,7 @@ import {
   settingsKeyboard,
   topUpMenuKeyboard,
   updatePromptKeyboard,
+  webLinkKeyboard,
   type Keyboard,
   type PickerCard,
 } from './keyboards/keyboards.js';
@@ -416,6 +417,8 @@ async function classifyCallback(
       return { t: 'Cancel' };
     case 'settings':
       return { t: 'Settings' };
+    case 'web':
+      return { t: 'WebCabinet' };
     case 'report':
       if (!deps.reportLimit.tryAcquire(user.id, deps.clock.now())) {
         throw new ValidationError(COPY.reportRateLimit);
@@ -575,6 +578,15 @@ async function runEffect(
     case 'ShowSettings':
       await send(sender, COPY.settingsTitle, settingsKeyboard(rev));
       return;
+    case 'SendWebLink': {
+      const url = deps.webCabinet?.issueLoginUrl(user.id, user.telegramId) ?? null;
+      if (url === null) {
+        await send(sender, COPY.webUnavailable, settingsKeyboard(rev));
+        return;
+      }
+      await send(sender, COPY.webLink, webLinkKeyboard(url, rev));
+      return;
+    }
     case 'ShowTopUpMenu':
       await send(sender, COPY.topUpMenu, topUpMenuKeyboard(rev));
       return;

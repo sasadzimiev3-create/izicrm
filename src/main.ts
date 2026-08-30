@@ -4,6 +4,8 @@ import { assertApplicationRole, createPool } from './infrastructure/db/pool.js';
 import { createDataAccess } from './infrastructure/db/data-access.js';
 import { createTelegramBot } from './infrastructure/telegram/bot.js';
 import { registerTelegramHandlers } from './interface/telegram/handlers/register.js';
+import { createWebAuth } from './interface/web/auth.js';
+import { defaultPublicDir, startWebServer } from './interface/web/server.js';
 import { startHealthServer } from './infrastructure/ops/health.js';
 import { createInFlightGate, ShutdownInProgressError, trackUnitOfWork } from './infrastructure/ops/inflight.js';
 import { assertMigrationsApplied } from './infrastructure/ops/migrations.js';
@@ -22,7 +24,18 @@ async function main(): Promise<void> {
 
   const gate = createInFlightGate();
   const access = createDataAccess(pool);
-  const deps = createTelegramDeps({ ...access, uow: trackUnitOfWork(access.uow, gate) });
+  const tracked = { ...access, uow: trackUnitOfWork(access.uow, gate) };
+  const publicUrl =
+    env.WEB_PUBLIC_URL === undefined || env.WEB_PUBLIC_URL === '' ? null : env.WEB_PUBLIC_URL;
+  const authSecret = env.WEB_SESSION_SECRET === undefined || env.WEB_SESSION_SECRET === '' ? token : env.WEB_SESSION_SECRET;
+  const auth = createWebAuth({ secret: authSecret, publicUrl, botToken: token });
+  const deps = createTelegramDeps(tracked, {
+    webCabinet: {
+      issueLoginUrl(userId, telegramId) {
+        return auth.issueLoginUrl(userId, telegramId);
+      },
+    },
+  });
   const bot = createTelegramBot(token, { proxyUrl: env.TELEGRAM_PROXY_URL });
   bot.use(async (_ctx, next) => {
     if (!gate.isAccepting()) {
@@ -45,15 +58,45 @@ async function main(): Promise<void> {
   );
 
   bindStopSignals(bot, gate);
-  const me = await bot.api.getMe();
-  console.error(`telegram polling as @${me.username}`);
-  await bot.start();
-  await finalizeRuntime({ bot, pool, health, gate });
+  const webDeps = {
+    services: deps.services,
+    uow: deps.uow,
+    users: deps.users,
+    clock: deps.clock,
+    logger: deps.logger,
+    auth,
+    publicDir: defaultPublicDir(),
+    botUsername: null as string | null,
+  };
+  const web = await startWebServer(webDeps, { host: env.WEB_HOST, port: env.WEB_PORT });
+  console.error(`web :${String(web.port)}`);
+
+  while (gate.isAccepting()) {
+    try {
+      const me = await bot.api.getMe();
+      webDeps.botUsername = me.username ?? null;
+      console.error(`telegram polling as @${me.username}`);
+      await bot.start();
+      break;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'unknown';
+      console.error(`telegram connect failed, retry in 5s: ${message}`);
+      await delay(5_000);
+    }
+  }
+
+  await finalizeRuntime({ bot, pool, health, web, gate });
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 try {
   await main();
 } catch (error) {
   console.error(error);
-  process.exitCode = 1;
+  process.exit(1);
 }

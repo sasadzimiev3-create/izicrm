@@ -7,7 +7,7 @@ alwaysApply: false
 # Архитектура
 
 ```
-interface/telegram → application → domain ← infrastructure → PostgreSQL
+interface/telegram · interface/web → application → domain ← infrastructure → PostgreSQL
 ```
 
 ## Направление зависимостей
@@ -31,6 +31,8 @@ interface/telegram → application → domain ← infrastructure → PostgreSQL
   Бизнес-логики не содержит.
 - `interface/telegram` — handlers, FSM, клавиатуры, чистые view-функции. Ни арифметики,
   ни SQL, ни правил предметной области.
+- `interface/web` — HTTP-кабинет: те же application-сервисы, что Telegram. Деньги в JSON —
+  строки; Number только в браузере для графиков.
 
 ## Handlers без бизнес-логики
 

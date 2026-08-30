@@ -12,8 +12,10 @@ describe('главное меню', () => {
       ['Добавить', 'Вывел'],
       ['⚙️ Настройки'],
     ]);
-    expect(rows[1]?.[0]?.style).toBe('success');
-    expect(rows[1]?.[1]?.style).toBe('danger');
+    const add = rows[1]?.[0];
+    const spend = rows[1]?.[1];
+    expect(add !== undefined && 'data' in add ? add.style : undefined).toBe('success');
+    expect(spend !== undefined && 'data' in spend ? spend.style : undefined).toBe('danger');
     const dash = dashboardKeyboard(1, {
       working: [{ id: cardId(1), name: 'Сбер1', balance: Money.from('100') }],
       frozen: [{ id: cardId(2), name: 'Альфа', balance: Money.from('50') }],
@@ -26,6 +28,7 @@ describe('главное меню', () => {
   it('настройки без переименования и смены стикера', () => {
     const labels = settingsKeyboard(1).flat().map((button) => button.text);
     expect(labels.some((text) => text.includes('Отчёт'))).toBe(true);
+    expect(labels.some((text) => /кабинет/i.test(text))).toBe(true);
     expect(labels.some((text) => text.includes('Удалить'))).toBe(true);
     expect(labels.join('\n')).not.toMatch(/Переименовать|стикер/i);
   });

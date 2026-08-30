@@ -1,7 +1,7 @@
 import { createAppServices } from './application/services/create-services.js';
 import { createClock } from './config/clock.js';
 import type { DataAccess } from './infrastructure/db/data-access.js';
-import type { TelegramDeps } from './interface/telegram/deps.js';
+import type { TelegramDeps, WebCabinet } from './interface/telegram/deps.js';
 import {
   createReportRateLimiter,
   stubReportService,
@@ -19,6 +19,7 @@ export function createTelegramDeps(
     report?: ReportService;
     nowFn?: () => Date;
     logger?: AppLogger;
+    webCabinet?: WebCabinet | null;
   } = {},
 ): TelegramDeps {
   return {
@@ -32,5 +33,6 @@ export function createTelegramDeps(
     logger: opts.logger ?? createSafeLogger(),
     report: opts.report ?? stubReportService(),
     reportLimit: createReportRateLimiter(),
+    webCabinet: opts.webCabinet ?? null,
   };
 }

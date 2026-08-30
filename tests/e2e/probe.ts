@@ -13,7 +13,7 @@ export function findButton(sender: MemorySender, label: string): string {
   for (const message of sender.messages) {
     for (const row of message.keyboard ?? []) {
       for (const button of row) {
-        if (button.text.includes(label)) {
+        if ('data' in button && button.text.includes(label)) {
           return button.data;
         }
       }

@@ -5,6 +5,7 @@ export type CallbackAction =
   | 'home'
   | 'settings'
   | 'report'
+  | 'web'
   | 'topup'
   | 'card_add'
   | 'topup_pick'
@@ -35,6 +36,7 @@ const ACTIONS = new Set<string>([
   'home',
   'settings',
   'report',
+  'web',
   'topup',
   'card_add',
   'topup_pick',

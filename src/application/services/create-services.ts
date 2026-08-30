@@ -4,11 +4,13 @@ import { CardService } from './card.service.js';
 import { DashboardService } from './dashboard.service.js';
 import { FreezeService } from './freeze.service.js';
 import { SpendService } from './spend.service.js';
+import { StatsService } from './stats.service.js';
 import { TopUpService } from './topup.service.js';
 import type { ServiceDeps } from './support.js';
 
 export type AppServices = {
   dashboard: DashboardService;
+  stats: StatsService;
   card: CardService;
   balanceUpdate: BalanceUpdateService;
   topup: TopUpService;
@@ -20,6 +22,7 @@ export type AppServices = {
 export function createAppServices(deps: ServiceDeps): AppServices {
   return {
     dashboard: new DashboardService(deps),
+    stats: new StatsService(deps),
     card: new CardService(deps),
     balanceUpdate: new BalanceUpdateService(deps),
     topup: new TopUpService(deps),

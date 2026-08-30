@@ -48,7 +48,7 @@ const telegramStack = [
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'coverage/**', 'node_modules/**', 'migrations/**'],
+    ignores: ['dist/**', 'coverage/**', 'node_modules/**', 'migrations/**', 'web/public/**'],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,

@@ -14,6 +14,10 @@ export type ReportRateLimiter = {
   tryAcquire(userId: UserId, now: Date): boolean;
 };
 
+export type WebCabinet = {
+  issueLoginUrl(userId: UserId, telegramId: string): string | null;
+};
+
 export type TelegramDeps = {
   services: AppServices;
   uow: UnitOfWork;
@@ -25,4 +29,5 @@ export type TelegramDeps = {
   logger: AppLogger;
   report: ReportService;
   reportLimit: ReportRateLimiter;
+  webCabinet: WebCabinet | null;
 };

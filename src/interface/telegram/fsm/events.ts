@@ -11,6 +11,7 @@ export type DialogEvent =
   | { t: 'Cancel' }
   | { t: 'Expired' }
   | { t: 'Settings' }
+  | { t: 'WebCabinet' }
   | { t: 'Report' }
   | { t: 'ReportDone' }
   | { t: 'ReportFailed'; message: string }

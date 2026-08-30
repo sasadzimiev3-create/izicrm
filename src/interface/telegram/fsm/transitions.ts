@@ -100,6 +100,8 @@ function reduceIdle(event: DialogEvent): ReduceResult {
   switch (event.t) {
     case 'Settings':
       return result(IDLE, { t: 'ShowSettings' });
+    case 'WebCabinet':
+      return result(IDLE, { t: 'SendWebLink' });
     case 'Report':
       return result({ t: 'ReportBuilding' }, { t: 'BuildReport' });
     case 'TopUpMenu':

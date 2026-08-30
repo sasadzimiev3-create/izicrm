@@ -9,6 +9,7 @@ import type { DialogState } from './states.js';
 export type Effect =
   | { t: 'ShowHome' }
   | { t: 'ShowSettings' }
+  | { t: 'SendWebLink' }
   | { t: 'ShowTopUpMenu' }
   | { t: 'ShowExpenseMenu' }
   | { t: 'ShowArchived' }

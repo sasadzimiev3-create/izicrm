@@ -15,9 +15,10 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 COPY migrations ./migrations
+COPY web/public ./web/public
 RUN chown -R node:node /app
 USER node
-EXPOSE 8080
+EXPOSE 8080 3000
 HEALTHCHECK --interval=10s --timeout=5s --start-period=25s --retries=3 \
   CMD ["node", "dist/infrastructure/ops/health-cli.js"]
 CMD ["node", "dist/main.js"]

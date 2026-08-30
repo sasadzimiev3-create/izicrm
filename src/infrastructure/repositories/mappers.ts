@@ -1,5 +1,6 @@
 import type { CardRow, CapitalFlowRow } from '../../application/ports/card-repository.js';
 import type { LocfBalance } from '../../application/ports/balance-repository.js';
+import type { JournalEntry } from '../../application/ports/report-query-repository.js';
 import type { DialogStateRecord } from '../../application/ports/dialog-state-repository.js';
 import type { UserRecord } from '../../application/ports/user-repository.js';
 import type { ArchiveReason } from '../../domain/cards/card.js';
@@ -75,6 +76,26 @@ export function toBalanceEntry(row: {
     capitalIn: toMoney(row.capital_in),
     capitalOut: toMoney(row.capital_out),
     effectiveDate: parseBusinessDate(row.effective_date),
+  };
+}
+
+export function toJournalEntry(row: {
+  card_id: string;
+  name: string;
+  effective_date: string;
+  amount: string;
+  capital_in: string;
+  capital_out: string;
+  source: JournalEntry['source'];
+}): JournalEntry {
+  return {
+    cardId: parseCardId(row.card_id),
+    cardName: row.name,
+    effectiveDate: parseBusinessDate(row.effective_date),
+    amount: toMoney(row.amount),
+    capitalIn: toMoney(row.capital_in),
+    capitalOut: toMoney(row.capital_out),
+    source: row.source,
   };
 }
 

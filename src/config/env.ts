@@ -1,9 +1,9 @@
 import { z } from 'zod';
 
-function portNumber(value: string): number {
+function portNumber(value: string, name: string): number {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
-    throw new Error('HEALTH_PORT must be an integer 1–65535');
+    throw new Error(`${name} must be an integer 1–65535`);
   }
   return parsed;
 }
@@ -18,7 +18,11 @@ const envSchema = z.object({
   DATABASE_ADMIN_URL: z.string().min(1).optional(),
   TZ: z.string().min(1).default('Europe/Moscow'),
   HEALTH_HOST: z.string().min(1).default('127.0.0.1'),
-  HEALTH_PORT: z.string().default('8080').transform(portNumber),
+  HEALTH_PORT: z.string().default('8080').transform((value) => portNumber(value, 'HEALTH_PORT')),
+  WEB_HOST: z.string().min(1).default('127.0.0.1'),
+  WEB_PORT: z.string().default('3000').transform((value) => portNumber(value, 'WEB_PORT')),
+  WEB_PUBLIC_URL: z.string().optional(),
+  WEB_SESSION_SECRET: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
