@@ -182,7 +182,6 @@ body {
   border: 0;
   padding: 16px 18px 14px;
   overflow: hidden;
-  align-self: start;
 }
 
 .chart-card:hover {
@@ -200,6 +199,24 @@ body {
 
 .hero-grid {
   grid-template-columns: minmax(280px, 0.9fr) minmax(360px, 1.4fr);
+  align-items: stretch;
+}
+
+.hero-grid > .card {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+}
+
+.chart-card .card-head {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+.chart-card .chart-hint {
+  flex-shrink: 0;
 }
 
 .bottom-grid {
@@ -207,7 +224,75 @@ body {
 }
 
 .ops-grid {
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: minmax(300px, 380px) 1fr;
+}
+
+.op-menu {
+  display: grid;
+  gap: 8px;
+}
+
+.op-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  color: var(--ink);
+  background: #1c1a18;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 12px 14px;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.op-choice:hover {
+  background: #221f1c;
+  border-color: #4a453f;
+  transform: translateY(-1px);
+}
+
+.op-num {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #2a2724;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  margin-top: 1px;
+}
+
+.op-choice-text {
+  display: grid;
+  gap: 2px;
+}
+
+.op-choice-text strong {
+  font-size: 14px;
+  letter-spacing: -0.02em;
+}
+
+.op-choice-text span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.op-back {
+  justify-self: start;
+  padding: 6px 12px;
+}
+
+.op-step-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
 }
 
 .card-head {
@@ -319,10 +404,14 @@ h2 {
 
 .ranges {
   display: flex;
+  flex-shrink: 0;
+  flex-wrap: nowrap;
   gap: 4px;
   background: rgba(0, 0, 0, 0.18);
   padding: 4px;
   border-radius: 999px;
+  position: relative;
+  z-index: 3;
 }
 
 .ranges button {
@@ -331,6 +420,7 @@ h2 {
   padding: 6px 10px;
   border-radius: 999px;
   font-size: 12px;
+  pointer-events: auto;
 }
 
 .ranges button:hover {
@@ -346,6 +436,12 @@ h2 {
   position: relative;
   height: 208px;
   margin-top: 8px;
+}
+
+.chart-card .chart-wrap {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 200px;
 }
 
 .chart-wrap canvas {
@@ -674,6 +770,7 @@ dialog::backdrop {
   .tab,
   .ghost,
   .primary,
+  .op-choice,
   .ranges button,
   .bar > span,
   .mini,

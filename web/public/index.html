@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Silians — кабинет</title>
-    <link rel="stylesheet" href="/app.css?v=4" />
+    <link rel="stylesheet" href="/app.css?v=6" />
   </head>
   <body>
     <div class="shell">
@@ -136,23 +136,43 @@
 
       <section id="panel-ops" class="panel hidden">
         <div class="ops-grid">
-          <article class="card">
+          <article class="card op-card">
             <h2>Новая операция</h2>
-            <p class="muted small">
-              Как в Telegram: новый баланс, не величина добавки. Записи не стираются —
-              исправление вытесняет строку за ту же дату, материал уходит в архив.
-            </p>
-            <form id="op-form" class="form">
-              <label>
-                Действие
-                <select id="op-kind">
-                  <option value="create">Добавить материал</option>
-                  <option value="update">Обновить баланс</option>
-                  <option value="topup">Пополнить</option>
-                  <option value="spend">Вывести / потратить</option>
-                </select>
-              </label>
-              <label id="name-field">
+            <div id="op-menu" class="op-menu">
+              <button type="button" class="op-choice" data-kind="create">
+                <span class="op-num">1</span>
+                <span class="op-choice-text">
+                  <strong>Добавить материал</strong>
+                </span>
+              </button>
+              <button type="button" class="op-choice" data-kind="update">
+                <span class="op-num">2</span>
+                <span class="op-choice-text">
+                  <strong>Зафиксировать прибыль</strong>
+                  <span>Обновить баланс</span>
+                </span>
+              </button>
+              <button type="button" class="op-choice" data-kind="topup">
+                <span class="op-num">3</span>
+                <span class="op-choice-text">
+                  <strong>Пополнить материал</strong>
+                  <span>Пополнить</span>
+                </span>
+              </button>
+              <button type="button" class="op-choice" data-kind="spend">
+                <span class="op-num">4</span>
+                <span class="op-choice-text">
+                  <strong>Снять деньги с материала</strong>
+                  <span>Вывести</span>
+                </span>
+              </button>
+            </div>
+            <form id="op-form" class="form hidden">
+              <input id="op-kind" type="hidden" value="" />
+              <button type="button" class="ghost op-back" id="op-back">Назад</button>
+              <p id="op-title" class="op-step-title"></p>
+              <p id="op-hint" class="muted small"></p>
+              <label id="name-field" class="hidden">
                 Название
                 <input id="op-name" type="text" maxlength="64" placeholder="Сбер 1234" />
               </label>
@@ -161,7 +181,7 @@
                 <select id="op-card"></select>
               </label>
               <label>
-                Сумма / новый баланс
+                <span id="op-amount-label">Новый баланс</span>
                 <input id="op-amount" type="text" inputmode="decimal" placeholder="10 000" required />
               </label>
               <p id="op-error" class="error hidden"></p>
@@ -226,6 +246,6 @@
       </form>
     </dialog>
 
-    <script src="/app.js?v=4"></script>
+    <script src="/app.js?v=6"></script>
   </body>
 </html>

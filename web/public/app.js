@@ -110,6 +110,45 @@ function rangeFrom(today, range) {
   return addDaysIso(today, -WINDOW_LOOKBACK[range]);
 }
 
+function utcStamp(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return Date.UTC(y, m - 1, d);
+}
+
+function daysBetweenIso(from, to) {
+  return Math.round((utcStamp(to) - utcStamp(from)) / 86400000);
+}
+
+/** Календарное окно кнопок 1W…All, даже если записей меньше. */
+function viewRange(today, range, series) {
+  const to = today;
+  if (range === 'All') {
+    const first = series && series.length > 0 ? series[0].date : today;
+    return { from: first, to };
+  }
+  return { from: rangeFrom(today, range), to };
+}
+
+function xAtDate(date, from, to, plot) {
+  const span = Math.max(1, daysBetweenIso(from, to));
+  const t = Math.min(1, Math.max(0, daysBetweenIso(from, date) / span));
+  return plot.x0 + t * plot.innerW;
+}
+
+function timeAxisLabels(from, to, plot) {
+  const span = Math.max(0, daysBetweenIso(from, to));
+  const count = span < 3 ? 2 : 4;
+  const labels = [];
+  const seen = new Set();
+  for (let i = 0; i < count; i += 1) {
+    const date = addDaysIso(from, Math.round((i / Math.max(1, count - 1)) * span));
+    if (seen.has(date)) continue;
+    seen.add(date);
+    labels.push({ x: xAtDate(date, from, to, plot), text: fmtDateShort(date) });
+  }
+  return labels;
+}
+
 function filterByDate(series, range, today, dateKey = 'date') {
   if (!series || series.length === 0) return [];
   if (range === 'All') return series.slice();
@@ -422,13 +461,14 @@ function fillRoundRect(ctx, x, y, w, h, r) {
 function applyCapitalHeader() {
   const win = currentWindow();
   const hover = state.hoverCapital;
+  const view = viewRange(state.data.today, state.range, state.data.capitalSeries);
   $('total-capital').textContent = hover ? hover.formatted : win.closing.formatted;
   const pct = win.percent ? win.percent.formatted : '—';
   $('window-pct').textContent = `${win.amount.delta} (${pct})`;
   $('window-pct').className = pillClass(pct, true);
   $('chart-hint').textContent = hover
     ? `${fmtDate(hover.date)} · ${hover.formatted}`
-    : `${fmtDate(win.from)} — ${fmtDate(win.to)}`;
+    : `${fmtDate(view.from)} — ${fmtDate(view.to)}`;
 }
 
 function drawCapitalFrame(progress) {
@@ -436,7 +476,8 @@ function drawCapitalFrame(progress) {
   const { ctx, width, height } = sizeCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
   const points = capitalPoints();
-  const plotBase = layoutPlot(width, height, { top: 14, right: 10, bottom: 28, left: 52 });
+  const view = viewRange(state.data.today, state.range, state.data.capitalSeries);
+  const plotBase = layoutPlot(width, height, { top: 14, right: 12, bottom: 28, left: 52 });
   if (points.length === 0) {
     charts.capitalLayout = null;
     ctx.fillStyle = 'rgba(255,255,255,0.75)';
@@ -447,8 +488,7 @@ function drawCapitalFrame(progress) {
   const values = points.map((p) => num(p.capital));
   const scale = niceTicks(Math.min(...values), Math.max(...values), 3);
   const plot = { ...plotBase, min: scale.min, max: scale.max };
-  const xAt = (i) =>
-    plot.x0 + (points.length === 1 ? plot.innerW / 2 : (i / (points.length - 1)) * plot.innerW);
+  const xAt = (i) => xAtDate(points[i].date, view.from, view.to, plot);
   const yAt = (v) => plot.y0 + ((plot.max - v) / (plot.max - plot.min)) * plot.innerH;
   charts.capitalLayout = { points, plot, xAt, yAt, width, height };
 
@@ -456,7 +496,7 @@ function drawCapitalFrame(progress) {
     ctx,
     plot,
     scale.ticks,
-    xLabelsFor(points, plot, (p) => fmtDateShort(p.date)),
+    timeAxisLabels(view.from, view.to, plot),
     'rgba(255,255,255,0.72)',
     'rgba(255,255,255,0.14)',
     scale.step,
@@ -551,13 +591,14 @@ function cumulativePoints() {
 function applyCumHeader() {
   const win = currentWindow();
   const hover = state.hoverCum;
+  const view = viewRange(state.data.today, state.range, state.data.capitalSeries);
   $('cum-kpi').textContent = hover ? hover.formatted : win.amount.delta;
   const pct = win.percent ? win.percent.formatted : '—';
   $('cum-pct').textContent = pct;
   $('cum-pct').className = pillClass(pct, false);
   $('cum-hint').textContent = hover
     ? `${fmtDate(hover.date)} · сколько заработано с начала выбранного периода`
-    : `${fmtDate(win.from)} — ${fmtDate(win.to)} · без пополнений и выводов`;
+    : `${fmtDate(view.from)} — ${fmtDate(view.to)} · без пополнений и выводов`;
 }
 
 function drawCumFrame(progress) {
@@ -565,7 +606,8 @@ function drawCumFrame(progress) {
   const { ctx, width, height } = sizeCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
   const points = cumulativePoints();
-  const plotBase = layoutPlot(width, height, { top: 14, right: 10, bottom: 28, left: 52 });
+  const view = viewRange(state.data.today, state.range, state.data.capitalSeries);
+  const plotBase = layoutPlot(width, height, { top: 14, right: 12, bottom: 28, left: 52 });
   if (points.length === 0) {
     charts.cumLayout = null;
     ctx.fillStyle = '#8a8680';
@@ -578,8 +620,7 @@ function drawCumFrame(progress) {
   const hi = Math.max(0, ...values);
   const scale = niceTicks(lo, hi, 3);
   const plot = { ...plotBase, min: scale.min, max: scale.max };
-  const xAt = (i) =>
-    plot.x0 + (points.length === 1 ? plot.innerW / 2 : (i / (points.length - 1)) * plot.innerW);
+  const xAt = (i) => xAtDate(points[i].date, view.from, view.to, plot);
   const yAt = (v) => plot.y0 + ((plot.max - v) / (plot.max - plot.min)) * plot.innerH;
   charts.cumLayout = { points, plot, xAt, yAt, width, height };
 
@@ -587,7 +628,7 @@ function drawCumFrame(progress) {
     ctx,
     plot,
     scale.ticks,
-    xLabelsFor(points, plot, (p) => fmtDateShort(p.date)),
+    timeAxisLabels(view.from, view.to, plot),
     '#8a8680',
     'rgba(255,255,255,0.06)',
     scale.step,
@@ -844,10 +885,56 @@ async function reload() {
   renderAll();
 }
 
-function toggleOpFields() {
-  const kind = $('op-kind').value;
+const OP_STEPS = {
+  create: {
+    title: 'Добавить материал',
+    hint: 'Название и текущий баланс. Эта сумма — точка отсчёта, прибылью не считается.',
+    amount: 'Текущий баланс',
+  },
+  update: {
+    title: 'Зафиксировать прибыль',
+    hint: 'Введите новый баланс. Разница с предыдущим — прибыль или убыток.',
+    amount: 'Новый баланс',
+  },
+  topup: {
+    title: 'Пополнить материал',
+    hint: 'Введите новый баланс после пополнения, не величину добавки. Прибыль не изменится.',
+    amount: 'Новый баланс',
+  },
+  spend: {
+    title: 'Снять деньги с материала',
+    hint: 'Введите новый баланс после снятия, не сколько вывели. Прибыль не изменится.',
+    amount: 'Новый баланс',
+  },
+};
+
+function showOpMenu() {
+  $('op-kind').value = '';
+  $('op-menu').classList.remove('hidden');
+  $('op-form').classList.add('hidden');
+  showError('op-error', '');
+  $('op-amount').value = '';
+  $('op-name').value = '';
+}
+
+function openOp(kind, cardId) {
+  const step = OP_STEPS[kind];
+  if (!step) return;
+  $('op-kind').value = kind;
+  $('op-title').textContent = step.title;
+  $('op-hint').textContent = step.hint;
+  $('op-amount-label').textContent = step.amount;
   $('name-field').classList.toggle('hidden', kind !== 'create');
   $('card-field').classList.toggle('hidden', kind === 'create');
+  $('op-name').required = kind === 'create';
+  $('op-menu').classList.add('hidden');
+  $('op-form').classList.remove('hidden');
+  showError('op-error', '');
+  if (kind !== 'create' && cardId) {
+    $('op-card').value = String(cardId);
+  }
+  const focusId = kind === 'create' ? 'op-name' : 'op-amount';
+  requestAnimationFrame(() => $(focusId).focus());
 }
 
 function escapeHtml(text) {
@@ -937,7 +1024,13 @@ function bindCharts() {
   });
 }
 
-$('op-kind').addEventListener('change', toggleOpFields);
+$('op-menu').addEventListener('click', (event) => {
+  const btn = event.target.closest('button[data-kind]');
+  if (!btn) return;
+  openOp(btn.dataset.kind);
+});
+
+$('op-back').addEventListener('click', () => showOpMenu());
 
 $('op-form').addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -962,6 +1055,7 @@ $('op-form').addEventListener('submit', async (event) => {
     }
     $('op-amount').value = '';
     $('op-name').value = '';
+    showOpMenu();
     await reload();
   } catch (error) {
     showError('op-error', error.message);
@@ -975,6 +1069,7 @@ document.querySelectorAll('.tab').forEach((btn) => {
 document.getElementById('ranges').addEventListener('click', (event) => {
   const btn = event.target.closest('button[data-range]');
   if (!btn) return;
+  event.preventDefault();
   state.range = btn.dataset.range;
   state.hoverCapital = null;
   state.hoverPnl = null;
@@ -983,7 +1078,9 @@ document.getElementById('ranges').addEventListener('click', (event) => {
   hideTooltip($('pnl-tooltip'));
   hideTooltip($('cum-tooltip'));
   document.querySelectorAll('#ranges button').forEach((el) => el.classList.toggle('is-active', el === btn));
-  renderOverview({ animate: true });
+  applyCapitalHeader();
+  applyCumHeader();
+  requestAnimationFrame(() => renderOverview({ animate: true }));
 });
 
 $('logout').addEventListener('click', async () => {
@@ -995,8 +1092,7 @@ $('journal').addEventListener('click', (event) => {
   const btn = event.target.closest('[data-fix]');
   if (!btn) return;
   $('op-kind').value = 'update';
-  toggleOpFields();
-  $('op-card').value = btn.dataset.fix;
+  openOp('update', btn.dataset.fix);
   switchTab('ops');
 });
 
@@ -1065,7 +1161,7 @@ $('archive-form').addEventListener('submit', async (event) => {
 (async function boot() {
   try {
     await api('/api/me');
-    toggleOpFields();
+    showOpMenu();
     bindCharts();
     await reload();
     let resizeFrame = 0;
