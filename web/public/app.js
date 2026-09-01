@@ -130,10 +130,34 @@ function viewRange(today, range, series) {
   return { from: rangeFrom(today, range), to };
 }
 
+/**
+ * Ось графика. Если история занимает < 20% выбранного окна, приближаем к данным:
+ * иначе 1Y с неделей записей — невидимая линия у правого края.
+ */
+function plotView(today, range, series) {
+  const view = viewRange(today, range, series);
+  if (!series || series.length === 0) return view;
+  const first = series[0].date;
+  if (first <= view.from) return view;
+  const viewSpan = Math.max(1, daysBetweenIso(view.from, view.to));
+  const dataSpan = Math.max(1, daysBetweenIso(first, view.to));
+  if (dataSpan / viewSpan >= 0.2) return view;
+  return { from: first, to: view.to };
+}
+
 function xAtDate(date, from, to, plot) {
   const span = Math.max(1, daysBetweenIso(from, to));
   const t = Math.min(1, Math.max(0, daysBetweenIso(from, date) / span));
   return plot.x0 + t * plot.innerW;
+}
+
+function fmtAxisDate(iso, spanDays) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  if (spanDays >= 90) {
+    return `${MONTHS[Number(m) - 1]} ${String(y).slice(2)}`;
+  }
+  return `${d}.${m}`;
 }
 
 function timeAxisLabels(from, to, plot) {
@@ -145,7 +169,7 @@ function timeAxisLabels(from, to, plot) {
     const date = addDaysIso(from, Math.round((i / Math.max(1, count - 1)) * span));
     if (seen.has(date)) continue;
     seen.add(date);
-    labels.push({ x: xAtDate(date, from, to, plot), text: fmtDateShort(date) });
+    labels.push({ x: xAtDate(date, from, to, plot), text: fmtAxisDate(date, span) });
   }
   return labels;
 }
@@ -221,12 +245,16 @@ function paintQuote(data) {
 }
 
 async function refreshQuote() {
+  if (refreshQuote.busy) return;
+  refreshQuote.busy = true;
   try {
     const res = await fetch('/api/quote/usdt-rub', { credentials: 'same-origin' });
     const body = await res.json().catch(() => ({}));
     paintQuote(res.ok ? body : null);
   } catch {
     paintQuote(null);
+  } finally {
+    refreshQuote.busy = false;
   }
 }
 
@@ -506,10 +534,21 @@ function fillRoundRect(ctx, x, y, w, h, r) {
   ctx.fill();
 }
 
+function drawAnchor(ctx, x, y, color) {
+  ctx.beginPath();
+  ctx.fillStyle = '#fff';
+  ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.fillStyle = color;
+  ctx.arc(x, y, 2.2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 function applyCapitalHeader() {
   const win = currentWindow();
   const hover = state.hoverCapital;
-  const view = viewRange(state.data.today, state.range, state.data.capitalSeries);
+  const view = plotView(state.data.today, state.range, state.data.capitalSeries);
   $('total-capital').textContent = hover ? hover.formatted : win.closing.formatted;
   const pct = win.percent ? win.percent.formatted : '—';
   $('window-pct').textContent = `${win.amount.delta} (${pct})`;
@@ -524,8 +563,7 @@ function drawCapitalFrame(progress) {
   const { ctx, width, height } = sizeCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
   const points = capitalPoints();
-  const view = viewRange(state.data.today, state.range, state.data.capitalSeries);
-  const plotBase = layoutPlot(width, height, { top: 14, right: 12, bottom: 28, left: 52 });
+  const plotBase = layoutPlot(width, height, { top: 14, right: 20, bottom: 28, left: 52 });
   if (points.length === 0) {
     charts.capitalLayout = null;
     ctx.fillStyle = 'rgba(255,255,255,0.75)';
@@ -536,6 +574,7 @@ function drawCapitalFrame(progress) {
   const values = points.map((p) => num(p.capital));
   const scale = niceTicks(Math.min(...values), Math.max(...values), 3);
   const plot = { ...plotBase, min: scale.min, max: scale.max };
+  const view = plotView(state.data.today, state.range, state.data.capitalSeries);
   const xAt = (i) => xAtDate(points[i].date, view.from, view.to, plot);
   const yAt = (v) => plot.y0 + ((plot.max - v) / (plot.max - plot.min)) * plot.innerH;
   charts.capitalLayout = { points, plot, xAt, yAt, width, height };
@@ -571,6 +610,9 @@ function drawCapitalFrame(progress) {
   fill.addColorStop(1, 'rgba(255,255,255,0.02)');
   ctx.fillStyle = fill;
   ctx.fill();
+
+  const last = visible.length - 1;
+  drawAnchor(ctx, xAt(last), yAt(values[last]), '#e85d04');
 
   const hover = state.hoverCapital;
   if (!hover) return;
@@ -608,7 +650,23 @@ function animateCapital() {
     drawCapitalFrame(eased);
     if (t < 1) charts.capitalAnim = requestAnimationFrame(tick);
   };
-  charts.capitalAnim = requestAnimationFrame(tick);
+  tick(start);
+}
+
+function animateCum() {
+  cancelAnimationFrame(charts.cumAnim);
+  if (reducedMotion()) {
+    drawCumFrame(1);
+    return;
+  }
+  const start = performance.now();
+  const tick = (now) => {
+    const t = Math.min(1, (now - start) / 520);
+    const eased = 1 - (1 - t) ** 3;
+    drawCumFrame(eased);
+    if (t < 1) charts.cumAnim = requestAnimationFrame(tick);
+  };
+  tick(start);
 }
 
 function cumulativePoints() {
@@ -639,7 +697,7 @@ function cumulativePoints() {
 function applyCumHeader() {
   const win = currentWindow();
   const hover = state.hoverCum;
-  const view = viewRange(state.data.today, state.range, state.data.capitalSeries);
+  const view = plotView(state.data.today, state.range, state.data.capitalSeries);
   $('cum-kpi').textContent = hover ? hover.formatted : win.amount.delta;
   const pct = win.percent ? win.percent.formatted : '—';
   $('cum-pct').textContent = pct;
@@ -654,8 +712,8 @@ function drawCumFrame(progress) {
   const { ctx, width, height } = sizeCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
   const points = cumulativePoints();
-  const view = viewRange(state.data.today, state.range, state.data.capitalSeries);
-  const plotBase = layoutPlot(width, height, { top: 14, right: 12, bottom: 28, left: 52 });
+  const view = plotView(state.data.today, state.range, state.data.capitalSeries);
+  const plotBase = layoutPlot(width, height, { top: 14, right: 20, bottom: 28, left: 52 });
   if (points.length === 0) {
     charts.cumLayout = null;
     ctx.fillStyle = '#8a8680';
@@ -720,6 +778,9 @@ function drawCumFrame(progress) {
   ctx.fillStyle = fill;
   ctx.fill();
 
+  const last = visible.length - 1;
+  drawAnchor(ctx, xAt(last), yAt(values[last]), values[last] < 0 ? '#e10f04' : '#1a9365');
+
   const hover = state.hoverCum;
   if (!hover) return;
   const idx = points.findIndex((p) => p.date === hover.date);
@@ -741,22 +802,6 @@ function drawCumFrame(progress) {
   ctx.fillStyle = values[idx] < 0 ? '#e10f04' : '#1a9365';
   ctx.arc(hx, hy, 2.5, 0, Math.PI * 2);
   ctx.fill();
-}
-
-function animateCum() {
-  cancelAnimationFrame(charts.cumAnim);
-  if (reducedMotion()) {
-    drawCumFrame(1);
-    return;
-  }
-  const start = performance.now();
-  const tick = (now) => {
-    const t = Math.min(1, (now - start) / 520);
-    const eased = 1 - (1 - t) ** 3;
-    drawCumFrame(eased);
-    if (t < 1) charts.cumAnim = requestAnimationFrame(tick);
-  };
-  charts.cumAnim = requestAnimationFrame(tick);
 }
 
 function pnlSeries() {
@@ -785,7 +830,7 @@ function drawPnlFrame() {
   const { ctx, width, height } = sizeCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
   const points = pnlSeries();
-  const plotBase = layoutPlot(width, height, { top: 16, right: 12, bottom: 28, left: 52 });
+  const plotBase = layoutPlot(width, height, { top: 16, right: 20, bottom: 28, left: 52 });
   if (points.length === 0) {
     charts.pnlLayout = null;
     ctx.fillStyle = '#8a8680';
@@ -1131,9 +1176,7 @@ document.getElementById('ranges').addEventListener('click', (event) => {
   hideTooltip($('pnl-tooltip'));
   hideTooltip($('cum-tooltip'));
   document.querySelectorAll('#ranges button').forEach((el) => el.classList.toggle('is-active', el === btn));
-  applyCapitalHeader();
-  applyCumHeader();
-  requestAnimationFrame(() => renderOverview({ animate: true, chartsOnly: true }));
+  renderOverview({ animate: true, chartsOnly: true });
 });
 
 $('logout').addEventListener('click', async () => {

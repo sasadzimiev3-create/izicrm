@@ -1,7 +1,7 @@
 import { detectBankKind } from '../../domain/cards/bank-emoji.js';
 import type { CardBalanceChange } from '../../domain/finance/card-change.js';
 import type { AllTimePnl, DailyPnl, PeriodPnl } from '../../domain/finance/pnl.js';
-import { formatMoney, formatMoneyDelta, formatPercent } from '../../domain/money/format.js';
+import { formatMoney, formatMoneyDelta, formatPercent, formatSharePercent } from '../../domain/money/format.js';
 import { Decimal, type Money } from '../../domain/money/money.js';
 import type { PercentResult } from '../../domain/money/percent.js';
 import type { BalanceEntrySource } from '../../application/ports/balance-repository.js';
@@ -44,6 +44,17 @@ function percentView(result: PercentResult): PercentView {
   return {
     defined: true,
     formatted: formatPercent(result),
+    value: result.value.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2),
+  };
+}
+
+function shareView(result: PercentResult): PercentView {
+  if (!result.defined) {
+    return { defined: false, formatted: EM_DASH };
+  }
+  return {
+    defined: true,
+    formatted: formatSharePercent(result),
     value: result.value.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2),
   };
 }
@@ -109,7 +120,7 @@ export function serializeSnapshot(snapshot: StatsSnapshot): Record<string, unkno
     totalCapital: moneyView(snapshot.totalCapital),
     workingCapital: moneyView(snapshot.workingCapital),
     frozenCapital: moneyView(snapshot.frozenCapital),
-    workingShare: percentView(snapshot.workingShare),
+    workingShare: shareView(snapshot.workingShare),
     daily: dailyView(snapshot.daily),
     monthly: periodView(snapshot.monthly),
     allTime: allTimeView(snapshot.allTime),
@@ -120,7 +131,7 @@ export function serializeSnapshot(snapshot: StatsSnapshot): Record<string, unkno
       bank: detectBankKind(item.name),
       balance: moneyView(item.balance),
       change: changeView(item.change),
-      share: percentView(item.share),
+      share: shareView(item.share),
     })),
     capitalSeries: snapshot.capitalSeries.map((point) => ({
       date: point.date,

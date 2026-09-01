@@ -46,6 +46,24 @@ export function formatPercent(result: PercentResult): string {
   return `${sign}${rounded.abs().toFixed(2)}%`;
 }
 
+/**
+ * Доля части в целом (`shareOf`): `61.40%`, без «+».
+ * Это не доходность — знак плюса зарезервирован для P&L (`formatPercent`).
+ */
+export function formatSharePercent(result: PercentResult): string {
+  if (!result.defined) {
+    return EM_DASH;
+  }
+  const rounded = result.value.toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+  if (rounded.isZero()) {
+    return '0.00%';
+  }
+  if (rounded.isNegative()) {
+    return `${MINUS}${rounded.abs().toFixed(2)}%`;
+  }
+  return `${rounded.toFixed(2)}%`;
+}
+
 function formatRubles(amount: Money, signMode: 'always' | 'negative-only'): string {
   const fixed = amount.abs().toFixed();
   const [intPart = '0', frac = '00'] = fixed.split('.');

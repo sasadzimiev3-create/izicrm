@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatMoney, formatMoneyDelta, formatPercent } from '../../../src/domain/money/format.js';
+import { formatMoney, formatMoneyDelta, formatPercent, formatSharePercent } from '../../../src/domain/money/format.js';
 import { Money } from '../../../src/domain/money/money.js';
 import { percentChange } from '../../../src/domain/money/percent.js';
 
@@ -46,5 +46,14 @@ describe('formatPercent', () => {
     expect(formatPercent(percentChange(Money.from('-500'), Money.from('10000')))).toBe(
       `${MINUS}5.00%`,
     );
+  });
+});
+
+describe('formatSharePercent', () => {
+  it('доля без знака плюса: это не доходность', () => {
+    expect(formatSharePercent(percentChange(Money.from('61.40'), Money.from('100')))).toBe('61.40%');
+    expect(formatSharePercent(percentChange(Money.from('24.56'), Money.from('100')))).toBe('24.56%');
+    expect(formatSharePercent(percentChange(Money.zero(), Money.from('100')))).toBe('0.00%');
+    expect(formatSharePercent({ defined: false, reason: 'ZERO_BASE' })).toBe(EM_DASH);
   });
 });
