@@ -63,6 +63,7 @@ body {
   font-weight: 700;
   letter-spacing: -0.04em;
   font-size: 22px;
+  min-width: 0;
 }
 
 .logo-mark {
@@ -72,6 +73,62 @@ body {
   background: conic-gradient(from 210deg, #22c55e, #86efac, #166534);
   display: inline-block;
   clip-path: polygon(15% 20%, 55% 20%, 85% 50%, 55% 80%, 15% 80%, 45% 50%);
+}
+
+.rate-chip {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  margin-left: 4px;
+  padding: 4px 10px 5px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #161513;
+  text-decoration: none;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.15;
+}
+
+.rate-chip:hover {
+  border-color: #3d3934;
+}
+
+.rate-pair {
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.rate-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+}
+
+.rate-leg {
+  display: flex;
+  flex-direction: column;
+}
+
+.rate-leg span {
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.rate-leg strong {
+  font-weight: 700;
 }
 
 .pill-nav {

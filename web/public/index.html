@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Silians — кабинет</title>
-    <link rel="stylesheet" href="/app.css?v=6" />
+    <link rel="stylesheet" href="/app.css?v=7" />
   </head>
   <body>
     <div class="shell">
@@ -12,6 +12,26 @@
         <div class="brand">
           <span class="logo-mark" aria-hidden="true"></span>
           <span>Silians</span>
+          <a
+            id="usdt-rate"
+            class="rate-chip"
+            href="https://rapira.net/ru/exchange/USDT_RUB"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Курс USDT/RUB на Rapira"
+          >
+            <span class="rate-pair">USDT/RUB</span>
+            <span class="rate-row">
+              <span class="rate-leg">
+                <span>покупка</span>
+                <strong id="usdt-buy">—</strong>
+              </span>
+              <span class="rate-leg">
+                <span>продажа</span>
+                <strong id="usdt-sell">—</strong>
+              </span>
+            </span>
+          </a>
         </div>
         <nav class="pill-nav" aria-label="Разделы">
           <button type="button" class="tab is-active" data-tab="overview">Обзор</button>
@@ -246,6 +266,6 @@
       </form>
     </dialog>
 
-    <script src="/app.js?v=6"></script>
+    <script src="/app.js?v=7"></script>
   </body>
 </html>

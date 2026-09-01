@@ -10,6 +10,7 @@ const BANK_COLOR = {
 const WINDOW_LOOKBACK = { '1W': 6, '1M': 29, '3M': 89, '1Y': 364 };
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 const NARROW = '\u202F';
+const QUOTE_MS = 15_000;
 
 const state = {
   data: null,
@@ -193,6 +194,51 @@ async function api(path, options) {
     throw new Error(body.error || 'Ошибка запроса');
   }
   return body;
+}
+
+function formatRate(value) {
+  if (value == null || value === '') return '—';
+  const [intPart = '0', frac = '00'] = String(value).split('.');
+  return `${intPart},${(frac + '00').slice(0, 2)}`;
+}
+
+function paintQuote(data) {
+  const buy = $('usdt-buy');
+  const sell = $('usdt-sell');
+  const link = $('usdt-rate');
+  if (!buy || !sell) return;
+  const ok = data && data.ask != null && data.bid != null;
+  buy.textContent = ok ? formatRate(data.ask) : '—';
+  sell.textContent = ok ? formatRate(data.bid) : '—';
+  if (link && data && data.href) {
+    link.href = data.href;
+  }
+  if (link) {
+    link.title = ok
+      ? `USDT/RUB на Rapira: покупка ${formatRate(data.ask)}, продажа ${formatRate(data.bid)}`
+      : 'Курс USDT/RUB на Rapira';
+  }
+}
+
+async function refreshQuote() {
+  try {
+    const res = await fetch('/api/quote/usdt-rub', { credentials: 'same-origin' });
+    const body = await res.json().catch(() => ({}));
+    paintQuote(res.ok ? body : null);
+  } catch {
+    paintQuote(null);
+  }
+}
+
+function startQuotePolling() {
+  void refreshQuote();
+  setInterval(() => {
+    if (document.visibilityState === 'hidden') return;
+    void refreshQuote();
+  }, QUOTE_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void refreshQuote();
+  });
 }
 
 function switchTab(tab) {
@@ -1163,6 +1209,7 @@ $('archive-form').addEventListener('submit', async (event) => {
     await api('/api/me');
     showOpMenu();
     bindCharts();
+    startQuotePolling();
     await reload();
     let resizeFrame = 0;
     window.addEventListener('resize', () => {

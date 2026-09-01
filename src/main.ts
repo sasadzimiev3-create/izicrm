@@ -5,6 +5,7 @@ import { createDataAccess } from './infrastructure/db/data-access.js';
 import { createTelegramBot } from './infrastructure/telegram/bot.js';
 import { registerTelegramHandlers } from './interface/telegram/handlers/register.js';
 import { createWebAuth } from './interface/web/auth.js';
+import { createRapiraQuoteSource } from './infrastructure/market/rapira.js';
 import { defaultPublicDir, startWebServer } from './interface/web/server.js';
 import { startHealthServer } from './infrastructure/ops/health.js';
 import { createInFlightGate, ShutdownInProgressError, trackUnitOfWork } from './infrastructure/ops/inflight.js';
@@ -67,6 +68,7 @@ async function main(): Promise<void> {
     auth,
     publicDir: defaultPublicDir(),
     botUsername: null as string | null,
+    quotes: createRapiraQuoteSource(),
   };
   const web = await startWebServer(webDeps, { host: env.WEB_HOST, port: env.WEB_PORT });
   console.error(`web :${String(web.port)}`);

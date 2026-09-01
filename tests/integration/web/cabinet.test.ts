@@ -42,6 +42,7 @@ describe('веб-кабинет и изоляция', () => {
         auth,
         publicDir: defaultPublicDir(),
         botUsername: null,
+        quotes: null,
       },
       { host: '127.0.0.1', port: 0 },
     );
@@ -84,6 +85,83 @@ describe('веб-кабинет и изоляция', () => {
       expect(afterBody.totalCapital.amount).toBe('16000.00');
     } finally {
       await web.close();
+    }
+  });
+
+  it('котировка USDT/RUB приходит из порта строками; без источника — пустые цены, не 5xx', async () => {
+    const pool = db.pool();
+    const access = createDataAccess(pool);
+    const services = createAppServices(access);
+    const auth = createWebAuth({
+      secret: 'cabinet-secret',
+      publicUrl: 'http://127.0.0.1',
+      nowFn: () => new Date('2024-08-20T12:00:00+03:00'),
+    });
+    const ownerTg = '88003';
+    const ownerId = parseUserId(await insertUser(pool, ownerTg));
+
+    const withQuote = await startWebServer(
+      {
+        services,
+        uow: access.uow,
+        users: access.users,
+        clock: createClock(() => new Date('2024-08-20T12:00:00+03:00')),
+        logger: createSafeLogger(() => undefined),
+        auth,
+        publicDir: defaultPublicDir(),
+        botUsername: null,
+        quotes: {
+          async getUsdtRub() {
+            return { bid: '87.86', ask: '87.87', last: '87.86' };
+          },
+        },
+      },
+      { host: '127.0.0.1', port: 0 },
+    );
+
+    try {
+      const base = `http://127.0.0.1:${String(withQuote.port)}`;
+      const cookie = await login(base, auth, ownerId, ownerTg);
+      const quoted = await fetch(`${base}/api/quote/usdt-rub`, { headers: { cookie } });
+      expect(quoted.status).toBe(200);
+      expect(await quoted.json()).toEqual({
+        href: 'https://rapira.net/ru/exchange/USDT_RUB',
+        bid: '87.86',
+        ask: '87.87',
+        last: '87.86',
+      });
+    } finally {
+      await withQuote.close();
+    }
+
+    const empty = await startWebServer(
+      {
+        services,
+        uow: access.uow,
+        users: access.users,
+        clock: createClock(() => new Date('2024-08-20T12:00:00+03:00')),
+        logger: createSafeLogger(() => undefined),
+        auth,
+        publicDir: defaultPublicDir(),
+        botUsername: null,
+        quotes: null,
+      },
+      { host: '127.0.0.1', port: 0 },
+    );
+
+    try {
+      const base = `http://127.0.0.1:${String(empty.port)}`;
+      const cookie = await login(base, auth, ownerId, ownerTg);
+      const res = await fetch(`${base}/api/quote/usdt-rub`, { headers: { cookie } });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({
+        href: 'https://rapira.net/ru/exchange/USDT_RUB',
+        bid: null,
+        ask: null,
+        last: null,
+      });
+    } finally {
+      await empty.close();
     }
   });
 });

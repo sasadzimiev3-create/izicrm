@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
 import type { AppServices } from '../../application/services/create-services.js';
+import { USDT_RUB_PAGE, type QuoteSource } from '../../application/ports/quote-source.js';
 import type { UserRepository } from '../../application/ports/user-repository.js';
 import type { UnitOfWork } from '../../application/ports/unit-of-work.js';
 import type { Clock } from '../../config/clock.js';
@@ -51,6 +52,7 @@ export type WebDeps = {
   auth: WebAuth;
   publicDir: string;
   botUsername: string | null;
+  quotes: QuoteSource | null;
 };
 
 export type WebServer = {
@@ -243,6 +245,16 @@ async function handleApi(
   if (method === 'GET' && pathname === '/api/overview') {
     const snapshot = await deps.services.stats.getSnapshot(user.id, today);
     json(res, 200, serializeSnapshot(snapshot));
+    return;
+  }
+  if (method === 'GET' && pathname === '/api/quote/usdt-rub') {
+    const quote = deps.quotes === null ? null : await deps.quotes.getUsdtRub();
+    json(res, 200, {
+      href: USDT_RUB_PAGE,
+      bid: quote?.bid ?? null,
+      ask: quote?.ask ?? null,
+      last: quote?.last ?? null,
+    });
     return;
   }
   if (method !== 'POST') {
