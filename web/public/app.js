@@ -398,6 +398,8 @@ function renderMaterials() {
 function sizeCanvas(canvas) {
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
+  // CSS must pin layout size. Otherwise width/height attributes (= bitmap × dpr)
+  // stretch the canvas on each redraw and the page grows without bound.
   const width = Math.max(1, Math.round(canvas.clientWidth || 640));
   const height = Math.max(1, Math.round(canvas.clientHeight || 200));
   const bitmapW = Math.round(width * dpr);
@@ -832,6 +834,8 @@ function drawPnlFrame() {
 }
 
 function drawGauge(canvas, share) {
+  canvas.style.width = '220px';
+  canvas.style.height = '140px';
   const { ctx, width, height } = sizeCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
   const cx = width / 2;
@@ -884,21 +888,25 @@ function nearestByX(layout, clientX, canvas) {
 function renderOverview(options = {}) {
   const d = state.data;
   const animate = Boolean(options.animate);
-  $('today-label').textContent = fmtDate(d.today);
-  $('updated-label').textContent = d.lastUpdateDate ? `обновлено ${fmtDate(d.lastUpdateDate)}` : '';
-  $('all-time-amount').textContent = d.allTime.amount ? d.allTime.amount.delta : '—';
-  $('all-time-pct').textContent = d.allTime.percent ? d.allTime.percent.formatted : '—';
-  $('all-time-pct').className = pillClass(d.allTime.percent ? d.allTime.percent.formatted : '', false);
-  $('daily-kpi').textContent = d.daily.formatted || '—';
-  $('month-kpi').textContent = d.monthly.amount ? `${d.monthly.amount.delta} (${d.monthly.percent.formatted})` : '—';
-  $('work-share').textContent = d.workingShare.formatted;
-  $('work-amount').textContent = d.workingCapital.formatted;
-  $('frozen-line').textContent = d.frozenCapital.amount === '0.00' ? '' : `Заморожено ${d.frozenCapital.formatted}`;
-  renderTicks(d.workingShare);
-  renderMinis(d.materials);
-  renderWatch(d.materials);
-  renderAllocation(d.materials);
-  renderFlows(d.flows);
+  const chartsOnly = Boolean(options.chartsOnly);
+  if (!chartsOnly) {
+    $('today-label').textContent = fmtDate(d.today);
+    $('updated-label').textContent = d.lastUpdateDate ? `обновлено ${fmtDate(d.lastUpdateDate)}` : '';
+    $('all-time-amount').textContent = d.allTime.amount ? d.allTime.amount.delta : '—';
+    $('all-time-pct').textContent = d.allTime.percent ? d.allTime.percent.formatted : '—';
+    $('all-time-pct').className = pillClass(d.allTime.percent ? d.allTime.percent.formatted : '', false);
+    $('daily-kpi').textContent = d.daily.formatted || '—';
+    $('month-kpi').textContent = d.monthly.amount ? `${d.monthly.amount.delta} (${d.monthly.percent.formatted})` : '—';
+    $('work-share').textContent = d.workingShare.formatted;
+    $('work-amount').textContent = d.workingCapital.formatted;
+    $('frozen-line').textContent = d.frozenCapital.amount === '0.00' ? '' : `Заморожено ${d.frozenCapital.formatted}`;
+    renderTicks(d.workingShare);
+    renderMinis(d.materials);
+    renderWatch(d.materials);
+    renderAllocation(d.materials);
+    renderFlows(d.flows);
+    drawGauge($('gauge'), d.workingShare);
+  }
   applyCapitalHeader();
   applyCumHeader();
   const win = currentWindow();
@@ -916,7 +924,6 @@ function renderOverview(options = {}) {
     drawCumFrame(1);
   }
   drawPnlFrame();
-  drawGauge($('gauge'), d.workingShare);
 }
 
 function renderAll() {
@@ -1126,7 +1133,7 @@ document.getElementById('ranges').addEventListener('click', (event) => {
   document.querySelectorAll('#ranges button').forEach((el) => el.classList.toggle('is-active', el === btn));
   applyCapitalHeader();
   applyCumHeader();
-  requestAnimationFrame(() => renderOverview({ animate: true }));
+  requestAnimationFrame(() => renderOverview({ animate: true, chartsOnly: true }));
 });
 
 $('logout').addEventListener('click', async () => {

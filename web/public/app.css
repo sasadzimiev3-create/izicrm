@@ -621,6 +621,14 @@ h2 {
   text-align: center;
 }
 
+.gauge-wrap canvas {
+  display: block;
+  width: 220px;
+  height: 140px;
+  margin: 0 auto;
+  max-width: 100%;
+}
+
 .gauge-label {
   margin: 0;
   font-size: 22px;
