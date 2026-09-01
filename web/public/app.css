@@ -603,8 +603,17 @@ dialog::backdrop {
   font-size: 14px;
 }
 
-.pnl-card {
+.pnl-card,
+.cum-card {
   margin-bottom: 18px;
+}
+
+.cum-wrap {
+  height: 220px;
+}
+
+.cum-card .kpi.tight {
+  margin-top: 2px;
 }
 
 .flow-list strong.up {
@@ -639,8 +648,9 @@ dialog::backdrop {
 
   .hero-grid .card:nth-child(1) { animation-delay: 0.02s; }
   .hero-grid .card:nth-child(2) { animation-delay: 0.08s; }
-  .pnl-card { animation-delay: 0.12s; }
-  .watchlist { animation-delay: 0.16s; }
+  .cum-card { animation-delay: 0.1s; }
+  .pnl-card { animation-delay: 0.14s; }
+  .watchlist { animation-delay: 0.18s; }
 
   .login-card {
     animation: rise 0.5s ease both;

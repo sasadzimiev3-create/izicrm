@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Silians — кабинет</title>
-    <link rel="stylesheet" href="/app.css?v=3" />
+    <link rel="stylesheet" href="/app.css?v=4" />
   </head>
   <body>
     <div class="shell">
@@ -77,6 +77,23 @@
             <p class="chart-hint" id="chart-hint"></p>
           </article>
         </div>
+
+        <article class="card cum-card">
+          <div class="card-head">
+            <div>
+              <span class="muted">Накопленная прибыль</span>
+              <p class="kpi tight">
+                <strong id="cum-kpi">—</strong>
+                <span id="cum-pct" class="pill"></span>
+              </p>
+            </div>
+          </div>
+          <div class="chart-wrap cum-wrap">
+            <canvas id="cum-chart" role="img" aria-label="Накопленная прибыль за период"></canvas>
+            <div class="chart-tooltip hidden" id="cum-tooltip"></div>
+          </div>
+          <p class="chart-hint" id="cum-hint"></p>
+        </article>
 
         <article class="card pnl-card">
           <div class="card-head">
@@ -209,6 +226,6 @@
       </form>
     </dialog>
 
-    <script src="/app.js?v=3"></script>
+    <script src="/app.js?v=4"></script>
   </body>
 </html>

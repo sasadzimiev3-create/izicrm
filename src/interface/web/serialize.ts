@@ -133,6 +133,11 @@ export function serializeSnapshot(snapshot: StatsSnapshot): Record<string, unkno
       formatted: formatMoneyDelta(point.amount),
       percent: percentView(point.percent),
     })),
+    cumulativePnlSeries: snapshot.cumulativePnlSeries.map((point) => ({
+      date: point.date,
+      amount: point.amount.toFixed(),
+      formatted: formatMoneyDelta(point.amount),
+    })),
     monthlySeries: snapshot.monthlySeries.map((point) => ({
       year: point.year,
       month: point.month,

@@ -28,6 +28,12 @@ export type DailyPnlPoint = {
   percent: PercentResult;
 };
 
+/** Накопленный P&L на дату: Σ DailyPnL с первой записи (T-4). */
+export type CumulativePnlPoint = {
+  date: BusinessDate;
+  amount: Money;
+};
+
 export type MonthlyPnlPoint = {
   year: number;
   month: number;
@@ -88,6 +94,8 @@ export type StatsSnapshot = {
   materials: StatsMaterial[];
   capitalSeries: CapitalPoint[];
   dailyPnlSeries: DailyPnlPoint[];
+  /** Календарный ряд: сумма дневных P&L к этой дате, не капитал и не потоки. */
+  cumulativePnlSeries: CumulativePnlPoint[];
   monthlySeries: MonthlyPnlPoint[];
   /** P&L окон обзора: те же `periodPnl`, без дополнительного запроса в БД. */
   windows: Record<WindowKey, WindowPnl>;

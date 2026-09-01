@@ -18,6 +18,7 @@ import type { Card, UserId } from '../../domain/cards/card.js';
 import type {
   ArchivedMaterial,
   CapitalPoint,
+  CumulativePnlPoint,
   DailyPnlPoint,
   FlowEntry,
   MonthlyPnlPoint,
@@ -167,8 +168,9 @@ function toMaterial(ledger: Ledger, card: Card, today: BusinessDate, total: Mone
 
 /**
  * Ряды и KPI из леджера. P&L только через `dailyPnl` / `monthlyPnl` / `allTimePnl`.
+ * `cumulativePnlSeries` — сумма дневных P&L по календарю (T-4), не новая формула.
  *
- * @see docs/financial-model.md §5, docs/excel-report.md §2
+ * @see docs/financial-model.md §5, T-4
  */
 export function buildStatsFromLedger(
   ledger: Ledger,
@@ -187,6 +189,7 @@ export function buildStatsFromLedger(
   | 'materials'
   | 'capitalSeries'
   | 'dailyPnlSeries'
+  | 'cumulativePnlSeries'
   | 'monthlySeries'
   | 'windows'
 > {
@@ -205,18 +208,26 @@ export function buildStatsFromLedger(
   const first = firstEntryDate(indexed);
   const capitalSeries: CapitalPoint[] = [];
   const dailyPnlSeries: DailyPnlPoint[] = [];
+  const cumulativePnlSeries: CumulativePnlPoint[] = [];
   const monthlySeries: MonthlyPnlPoint[] = [];
   let windows = emptyWindows(today);
   if (first !== undefined) {
-    for (const date of eachDate(first, today)) {
-      capitalSeries.push({ date, capital: capitalAsOf(indexed, date) });
-    }
     for (const date of uniqueObservationDates(indexed)) {
       const point = dailyPnl(indexed, date);
       if (!point.defined) {
         continue;
       }
       dailyPnlSeries.push({ date, amount: point.amount, percent: point.percent });
+    }
+    const dailyByDate = new Map(dailyPnlSeries.map((point) => [point.date, point.amount] as const));
+    let cumulative = Money.zero();
+    for (const date of eachDate(first, today)) {
+      capitalSeries.push({ date, capital: capitalAsOf(indexed, date) });
+      const dayPnl = dailyByDate.get(date);
+      if (dayPnl !== undefined) {
+        cumulative = cumulative.plus(dayPnl);
+      }
+      cumulativePnlSeries.push({ date, amount: cumulative });
     }
     for (const item of monthsInclusive(first, today)) {
       const pnl = monthlyPnl(indexed, item.year, item.month);
@@ -249,6 +260,7 @@ export function buildStatsFromLedger(
     materials,
     capitalSeries,
     dailyPnlSeries,
+    cumulativePnlSeries,
     monthlySeries,
     windows,
   };

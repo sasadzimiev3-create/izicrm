@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildStatsFromLedger, shareOf } from '../../../src/application/services/stats.service.js';
+import { addDays } from '../../../src/domain/finance/period.js';
 import { d, makeCard, makeEntry, makeLedger, rub } from '../finance/fixtures.js';
 
 describe('buildStatsFromLedger', () => {
@@ -18,6 +19,8 @@ describe('buildStatsFromLedger', () => {
     }
     expect(stats.dailyPnlSeries).toHaveLength(1);
     expect(stats.dailyPnlSeries[0]?.amount.toFixed()).toBe('1200.00');
+    expect(stats.cumulativePnlSeries[0]?.amount.toFixed()).toBe('0.00');
+    expect(stats.cumulativePnlSeries.at(-1)?.amount.toFixed()).toBe('1200.00');
     expect(stats.capitalSeries[0]?.capital.toFixed()).toBe('10000.00');
     expect(stats.capitalSeries.at(-1)?.capital.toFixed()).toBe('11200.00');
     expect(stats.materials).toHaveLength(1);
@@ -39,6 +42,12 @@ describe('buildStatsFromLedger', () => {
     expect(stats.windows['1W'].from).toBe('2024-08-14');
     expect(stats.windows['1W'].amount.toFixed()).toBe('200.00');
     expect(stats.windows['1W'].closing.toFixed()).toBe('11200.00');
+    expect(stats.cumulativePnlSeries.at(-1)?.amount.toFixed()).toBe('1200.00');
+    const beforeWeek = addDays(stats.windows['1W'].from, -1);
+    const baseline = stats.cumulativePnlSeries.find((point) => point.date === beforeWeek);
+    const last = stats.cumulativePnlSeries.at(-1);
+    expect(baseline?.amount.toFixed()).toBe('1000.00');
+    expect(last?.amount.minus(baseline!.amount).toFixed()).toBe(stats.windows['1W'].amount.toFixed());
   });
 
   it('доля в работе не определена при нулевом капитале', () => {

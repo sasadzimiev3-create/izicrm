@@ -18,13 +18,16 @@ const state = {
   archiveCardId: null,
   hoverCapital: null,
   hoverPnl: null,
+  hoverCum: null,
 };
 
 const charts = {
   capitalAnim: 0,
   pnlAnim: 0,
+  cumAnim: 0,
   capitalLayout: null,
   pnlLayout: null,
+  cumLayout: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -57,6 +60,26 @@ function pillClass(formatted, light) {
 function num(value) {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
+}
+
+function moneyToKopecks(amountStr) {
+  const text = String(amountStr ?? '0');
+  const neg = text.startsWith('-');
+  const raw = neg ? text.slice(1) : text;
+  const [intPart = '0', frac = '00'] = raw.split('.');
+  const k = BigInt(intPart || '0') * 100n + BigInt((frac + '00').slice(0, 2));
+  return neg ? -k : k;
+}
+
+function kopecksToDelta(k) {
+  const neg = k < 0n;
+  const abs = neg ? -k : k;
+  const intPart = abs / 100n;
+  const frac = abs % 100n;
+  const grouped = intPart.toString().replace(/\B(?=(\d{3})+(?!\d))/g, NARROW);
+  const body = frac === 0n ? `${grouped} ₽` : `${grouped},${frac.toString().padStart(2, '0')} ₽`;
+  if (k === 0n) return `+${body}`;
+  return `${neg ? '−' : '+'}${body}`;
 }
 
 function fmtAxisMoney(value, step) {
@@ -500,6 +523,153 @@ function animateCapital() {
   charts.capitalAnim = requestAnimationFrame(tick);
 }
 
+function cumulativePoints() {
+  const d = state.data;
+  const series = d.cumulativePnlSeries || [];
+  const raw = filterByDate(series, state.range, d.today);
+  if (raw.length === 0) return [];
+  const from = rangeFrom(d.today, state.range);
+  let baseline = 0n;
+  if (from) {
+    const prev = series.find((point) => point.date === addDaysIso(from, -1));
+    if (prev) baseline = moneyToKopecks(prev.amount);
+  }
+  return downsample(
+    raw.map((point) => {
+      const k = moneyToKopecks(point.amount) - baseline;
+      return {
+        date: point.date,
+        amount: k,
+        value: Number(k) / 100,
+        formatted: kopecksToDelta(k),
+      };
+    }),
+    240,
+  );
+}
+
+function applyCumHeader() {
+  const win = currentWindow();
+  const hover = state.hoverCum;
+  $('cum-kpi').textContent = hover ? hover.formatted : win.amount.delta;
+  const pct = win.percent ? win.percent.formatted : '—';
+  $('cum-pct').textContent = pct;
+  $('cum-pct').className = pillClass(pct, false);
+  $('cum-hint').textContent = hover
+    ? `${fmtDate(hover.date)} · сколько заработано с начала выбранного периода`
+    : `${fmtDate(win.from)} — ${fmtDate(win.to)} · без пополнений и выводов`;
+}
+
+function drawCumFrame(progress) {
+  const canvas = $('cum-chart');
+  const { ctx, width, height } = sizeCanvas(canvas);
+  ctx.clearRect(0, 0, width, height);
+  const points = cumulativePoints();
+  const plotBase = layoutPlot(width, height, { top: 14, right: 10, bottom: 28, left: 52 });
+  if (points.length === 0) {
+    charts.cumLayout = null;
+    ctx.fillStyle = '#8a8680';
+    ctx.font = '13px "Segoe UI", system-ui, sans-serif';
+    ctx.fillText('Пока нет накопленной прибыли', plotBase.x0, plotBase.y0 + 24);
+    return;
+  }
+  const values = points.map((p) => p.value);
+  const lo = Math.min(0, ...values);
+  const hi = Math.max(0, ...values);
+  const scale = niceTicks(lo, hi, 3);
+  const plot = { ...plotBase, min: scale.min, max: scale.max };
+  const xAt = (i) =>
+    plot.x0 + (points.length === 1 ? plot.innerW / 2 : (i / (points.length - 1)) * plot.innerW);
+  const yAt = (v) => plot.y0 + ((plot.max - v) / (plot.max - plot.min)) * plot.innerH;
+  charts.cumLayout = { points, plot, xAt, yAt, width, height };
+
+  drawGrid(
+    ctx,
+    plot,
+    scale.ticks,
+    xLabelsFor(points, plot, (p) => fmtDateShort(p.date)),
+    '#8a8680',
+    'rgba(255,255,255,0.06)',
+    scale.step,
+  );
+
+  const zeroY = yAt(0);
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(246,244,243,0.28)';
+  ctx.moveTo(plot.x0, zeroY);
+  ctx.lineTo(plot.x1, zeroY);
+  ctx.stroke();
+
+  const shown = Math.max(2, Math.round((points.length - 1) * progress) + 1);
+  const visible = points.slice(0, shown);
+  const lastVal = values[visible.length - 1];
+  const up = lastVal >= 0;
+  const stroke = up ? '#4ade80' : '#f87171';
+
+  ctx.beginPath();
+  visible.forEach((p, i) => {
+    const x = xAt(i);
+    const y = yAt(values[i]);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 2.4;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+  ctx.lineTo(xAt(visible.length - 1), zeroY);
+  ctx.lineTo(xAt(0), zeroY);
+  ctx.closePath();
+  const fill = ctx.createLinearGradient(0, plot.y0, 0, plot.y1);
+  if (up) {
+    fill.addColorStop(0, 'rgba(74, 222, 128, 0.28)');
+    fill.addColorStop(1, 'rgba(74, 222, 128, 0.02)');
+  } else {
+    fill.addColorStop(0, 'rgba(248, 113, 113, 0.08)');
+    fill.addColorStop(1, 'rgba(248, 113, 113, 0.28)');
+  }
+  ctx.fillStyle = fill;
+  ctx.fill();
+
+  const hover = state.hoverCum;
+  if (!hover) return;
+  const idx = points.findIndex((p) => p.date === hover.date);
+  if (idx < 0) return;
+  const hx = xAt(idx);
+  const hy = yAt(values[idx]);
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.setLineDash([4, 4]);
+  ctx.moveTo(hx, plot.y0);
+  ctx.lineTo(hx, plot.y1);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.fillStyle = '#fff';
+  ctx.arc(hx, hy, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.fillStyle = values[idx] < 0 ? '#e10f04' : '#1a9365';
+  ctx.arc(hx, hy, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function animateCum() {
+  cancelAnimationFrame(charts.cumAnim);
+  if (reducedMotion()) {
+    drawCumFrame(1);
+    return;
+  }
+  const start = performance.now();
+  const tick = (now) => {
+    const t = Math.min(1, (now - start) / 520);
+    const eased = 1 - (1 - t) ** 3;
+    drawCumFrame(eased);
+    if (t < 1) charts.cumAnim = requestAnimationFrame(tick);
+  };
+  charts.cumAnim = requestAnimationFrame(tick);
+}
+
 function pnlSeries() {
   const d = state.data;
   const useMonths = state.range === '3M' || state.range === '1Y' || state.range === 'All';
@@ -643,6 +813,7 @@ function renderOverview(options = {}) {
   renderAllocation(d.materials);
   renderFlows(d.flows);
   applyCapitalHeader();
+  applyCumHeader();
   const win = currentWindow();
   $('pnl-total').textContent = `${win.amount.delta} · ${win.percent.formatted}`;
   $('pnl-total').className = pillClass(win.percent.formatted, false);
@@ -650,8 +821,13 @@ function renderOverview(options = {}) {
     state.range === '3M' || state.range === '1Y' || state.range === 'All'
       ? 'По месяцам'
       : 'По дням, когда обновляли баланс';
-  if (animate) animateCapital();
-  else drawCapitalFrame(1);
+  if (animate) {
+    animateCapital();
+    animateCum();
+  } else {
+    drawCapitalFrame(1);
+    drawCumFrame(1);
+  }
   drawPnlFrame();
   drawGauge($('gauge'), d.workingShare);
 }
@@ -690,8 +866,10 @@ function showError(id, message) {
 function bindCharts() {
   const capital = $('capital-chart');
   const pnl = $('pnl-chart');
+  const cum = $('cum-chart');
   const capTip = $('capital-tooltip');
   const pnlTip = $('pnl-tooltip');
+  const cumTip = $('cum-tooltip');
 
   capital.addEventListener('mousemove', (event) => {
     const idx = nearestByX(charts.capitalLayout, event.clientX, capital);
@@ -713,6 +891,28 @@ function bindCharts() {
     hideTooltip(capTip);
     applyCapitalHeader();
     drawCapitalFrame(1);
+  });
+
+  cum.addEventListener('mousemove', (event) => {
+    const idx = nearestByX(charts.cumLayout, event.clientX, cum);
+    if (idx < 0) return;
+    const point = charts.cumLayout.points[idx];
+    state.hoverCum = point;
+    applyCumHeader();
+    drawCumFrame(1);
+    placeTooltip(
+      cumTip,
+      cum,
+      event.clientX,
+      event.clientY,
+      `<strong>${escapeHtml(point.formatted)}</strong><span>${escapeHtml(fmtDate(point.date))}</span>`,
+    );
+  });
+  cum.addEventListener('mouseleave', () => {
+    state.hoverCum = null;
+    hideTooltip(cumTip);
+    applyCumHeader();
+    drawCumFrame(1);
   });
 
   pnl.addEventListener('mousemove', (event) => {
@@ -778,8 +978,10 @@ document.getElementById('ranges').addEventListener('click', (event) => {
   state.range = btn.dataset.range;
   state.hoverCapital = null;
   state.hoverPnl = null;
+  state.hoverCum = null;
   hideTooltip($('capital-tooltip'));
   hideTooltip($('pnl-tooltip'));
+  hideTooltip($('cum-tooltip'));
   document.querySelectorAll('#ranges button').forEach((el) => el.classList.toggle('is-active', el === btn));
   renderOverview({ animate: true });
 });
