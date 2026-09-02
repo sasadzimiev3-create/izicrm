@@ -2,7 +2,7 @@ import type { CardRow } from '../ports/card-repository.js';
 import { balanceAsOf, firstEntryDate, indexLedger, lastEntryDate, type Ledger } from '../../domain/finance/balance.js';
 import { cardBalanceChange } from '../../domain/finance/card-change.js';
 import { capitalAsOf, frozenCapitalAsOf, workingCapitalAsOf } from '../../domain/finance/capital.js';
-import { isFrozen, isInScope, isWorking } from '../../domain/finance/card-scope.js';
+import { isFrozen, isWorking } from '../../domain/finance/card-scope.js';
 import {
   addDays,
   compareDates,
@@ -200,7 +200,11 @@ export function buildStatsFromLedger(
   const frozenCapital = frozenCapitalAsOf(indexed, today);
   const materials: StatsMaterial[] = [];
   for (const card of indexed.cards) {
-    if (isWorking(card, today) || (isInScope(card, today) && isFrozen(card))) {
+    // Плитки кабинета — только живые карты. Архив смотрит `archived`, не этот список.
+    if (card.archivedOn !== null) {
+      continue;
+    }
+    if (isWorking(card, today) || isFrozen(card)) {
       materials.push(toMaterial(indexed, card, today, totalCapital));
     }
   }

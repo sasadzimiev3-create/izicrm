@@ -50,6 +50,34 @@ describe('buildStatsFromLedger', () => {
     expect(last?.amount.minus(baseline!.amount).toFixed()).toBe(stats.windows['1W'].amount.toFixed());
   });
 
+  it('архивные карты не попадают в материалы кабинета', () => {
+    const live = makeCard({ id: 1, createdOn: '2024-08-01', name: 'Сбер' });
+    const frozen = makeCard({ id: 2, createdOn: '2024-08-01', name: 'Нал', frozenOn: '2024-08-10' });
+    const archived = makeCard({
+      id: 3,
+      createdOn: '2024-08-01',
+      name: 'Старый',
+      archivedOn: '2024-08-15',
+    });
+    const stillDated = makeCard({
+      id: 4,
+      createdOn: '2024-08-01',
+      name: 'Будущий архив',
+      archivedOn: '2024-08-25',
+    });
+    const ledger = makeLedger(
+      [live, frozen, archived, stillDated],
+      [
+        makeEntry(1, '2024-08-01', '10000', '10000'),
+        makeEntry(2, '2024-08-01', '2000', '2000'),
+        makeEntry(3, '2024-08-01', '3000', '3000'),
+        makeEntry(4, '2024-08-01', '4000', '4000'),
+      ],
+    );
+    const stats = buildStatsFromLedger(ledger, d('2024-08-20'));
+    expect(stats.materials.map((item) => item.name)).toEqual(['Сбер', 'Нал']);
+  });
+
   it('доля в работе не определена при нулевом капитале', () => {
     expect(shareOf(rub('0'), rub('0'))).toEqual({ defined: false, reason: 'ZERO_BASE' });
     const share = shareOf(rub('40'), rub('80'));

@@ -391,8 +391,13 @@ function renderFlows(flows) {
   });
 }
 
+function liveMaterials() {
+  const archivedIds = new Set((state.data.archived || []).map((row) => row.id));
+  return (state.data.materials || []).filter((item) => !archivedIds.has(item.id));
+}
+
 function fillCardSelects() {
-  const materials = state.data.materials || [];
+  const materials = liveMaterials();
   const html = materials.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('');
   $('op-card').innerHTML = html;
   $('archive-target').innerHTML = html;
@@ -401,7 +406,7 @@ function fillCardSelects() {
 function renderJournal() {
   const body = $('journal');
   body.innerHTML = '';
-  const activeIds = new Set((state.data.materials || []).map((item) => item.id));
+  const activeIds = new Set(liveMaterials().map((item) => item.id));
   const rows = state.data.journal || [];
   if (rows.length === 0) {
     body.innerHTML = '<tr><td colspan="6" class="muted">Пока нет действий</td></tr>';
@@ -973,8 +978,8 @@ function renderOverview(options = {}) {
     $('work-amount').textContent = d.workingCapital.formatted;
     $('frozen-line').textContent = d.frozenCapital.amount === '0.00' ? '' : `Заморожено ${d.frozenCapital.formatted}`;
     renderTicks(d.workingShare);
-    renderWatch(d.materials);
-    renderAllocation(d.materials);
+    renderWatch(liveMaterials());
+    renderAllocation(liveMaterials());
     renderFlows(d.flows);
     drawGauge($('gauge'), d.workingShare);
   }
@@ -1266,7 +1271,7 @@ document.addEventListener('click', (event) => {
 });
 
 function openArchive(cardId) {
-  const item = (state.data.materials || []).find((row) => row.id === cardId);
+  const item = liveMaterials().find((row) => row.id === cardId);
   if (!item) return;
   state.archiveCardId = cardId;
   $('archive-text').textContent = `«${item.name}» · ${item.balance.formatted}. История сохранится.`;
@@ -1289,7 +1294,7 @@ $('archive-cancel').addEventListener('click', () => $('archive-dialog').close())
 
 $('archive-form').addEventListener('submit', async (event) => {
   event.preventDefault();
-  const item = (state.data.materials || []).find((row) => row.id === state.archiveCardId);
+  const item = liveMaterials().find((row) => row.id === state.archiveCardId);
   if (!item) return;
   const zero = item.balance.amount === '0.00';
   const payload = {
