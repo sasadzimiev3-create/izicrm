@@ -2,7 +2,7 @@ import { createHmac, createHash, timingSafeEqual } from 'node:crypto';
 
 import { userId, type UserId } from '../../domain/cards/card.js';
 
-const LOGIN_TTL_SEC = 15 * 60;
+const LOGIN_TTL_SEC = 12 * 60 * 60;
 const SESSION_TTL_SEC = 14 * 24 * 60 * 60;
 export const SESSION_COOKIE = 'izicrm_session';
 
@@ -86,7 +86,7 @@ function parseToken(secret: string, token: string, kind: TokenKind, nowSec: numb
 }
 
 /**
- * Подпись входа: HMAC от секрета. Логин живёт 15 минут, сессия — 14 дней.
+ * Подпись входа: HMAC от секрета. Логин живёт 12 часов, сессия — 14 дней.
  * Telegram Login Widget проверяется по документации Bot API.
  */
 export function createWebAuth(opts: {

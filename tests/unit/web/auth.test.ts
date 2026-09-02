@@ -23,10 +23,17 @@ describe('web auth tokens', () => {
     const url = auth.issueLoginUrl(uid, '1001');
     expect(url).toContain('http://127.0.0.1:3000/auth?token=');
 
+    const stillValid = createWebAuth({
+      secret: 'test-secret',
+      publicUrl: 'http://127.0.0.1:3000',
+      nowFn: () => new Date('2024-08-20T23:59:00Z'),
+    });
+    expect(stillValid.verify(token, 'login')?.userId).toBe(uid);
+
     const expired = createWebAuth({
       secret: 'test-secret',
       publicUrl: 'http://127.0.0.1:3000',
-      nowFn: () => new Date('2024-08-20T12:20:00Z'),
+      nowFn: () => new Date('2024-08-21T00:01:00Z'),
     });
     expect(expired.verify(token, 'login')).toBeNull();
   });

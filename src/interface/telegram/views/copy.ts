@@ -47,7 +47,7 @@ export const COPY = {
   report: 'Отчёт в Excel',
   webCabinet: 'Веб-кабинет',
   webOpen: 'Открыть кабинет',
-  webLink: 'Ссылка на кабинет. Действует 15 минут. Данные те же, что в Telegram.',
+  webLink: 'Ссылка на кабинет. Действует 12 часов. Данные те же, что в Telegram.',
   webUnavailable: 'Веб-кабинет пока не настроен (нужен WEB_PUBLIC_URL).',
   deleteMaterial: 'Удалить материал',
   archiveMaterials: 'Архив материалов',
