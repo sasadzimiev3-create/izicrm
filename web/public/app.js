@@ -307,6 +307,18 @@ function frostTag() {
   return '<span class="frost-tag">заморожен</span>';
 }
 
+function iconSnow() {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 3v18M5 7l14 10M5 17l14-10"/></svg>';
+}
+
+function iconUndo() {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v5h5"/></svg>';
+}
+
+function iconTrash() {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h14M9 7V5h6v2M8 7l.8 12h6.4L16 7"/></svg>';
+}
+
 function closeWatchActions() {
   document.querySelectorAll('.watch.is-open').forEach((el) => el.classList.remove('is-open'));
 }
@@ -335,8 +347,8 @@ function renderWatch(materials) {
     if (!frozen) el.style.setProperty('--bank', bank);
     el.title = frozen ? `${item.name} · заморожен` : item.name;
     const primary = frozen
-      ? `<button type="button" class="watch-act restore" data-unfreeze="${item.id}">Вернуть</button>`
-      : `<button type="button" class="watch-act frost" data-freeze="${item.id}">Заморозить</button>`;
+      ? `<button type="button" class="watch-act restore" data-unfreeze="${item.id}" aria-label="Вернуть в оборот">${iconUndo()}<span>Вернуть</span></button>`
+      : `<button type="button" class="watch-act frost" data-freeze="${item.id}" aria-label="Заморозить">${iconSnow()}<span>Заморозить</span></button>`;
     el.innerHTML = `
       <div class="watch-veil" aria-hidden="true"></div>
       <div class="watch-body">
@@ -346,7 +358,7 @@ function renderWatch(materials) {
       </div>
       <div class="watch-actions">
         ${primary}
-        <button type="button" class="watch-act remove" data-archive="${item.id}">Удалить</button>
+        <button type="button" class="watch-act remove" data-archive="${item.id}" aria-label="Удалить">${iconTrash()}<span>Удалить</span></button>
       </div>`;
     root.append(el);
   });
@@ -398,9 +410,35 @@ function liveMaterials() {
 
 function fillCardSelects() {
   const materials = liveMaterials();
+  const prev = $('op-card').value;
   const html = materials.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('');
   $('op-card').innerHTML = html;
   $('archive-target').innerHTML = html;
+  if (prev && materials.some((item) => String(item.id) === prev)) {
+    $('op-card').value = prev;
+  }
+  syncCurrentBalance();
+}
+
+function selectedMaterial() {
+  const id = Number($('op-card').value);
+  return liveMaterials().find((item) => item.id === id) ?? null;
+}
+
+function usesBalanceShift(kind) {
+  return kind === 'update' || kind === 'topup' || kind === 'spend';
+}
+
+function syncCurrentBalance() {
+  const item = selectedMaterial();
+  $('op-current').textContent = item ? item.balance.formatted : '—';
+}
+
+function toggleBalanceShift(kind) {
+  const show = usesBalanceShift(kind);
+  $('current-balance-block').classList.toggle('hidden', !show);
+  $('balance-arrow').classList.toggle('hidden', !show);
+  if (show) syncCurrentBalance();
 }
 
 function renderJournal() {
@@ -986,8 +1024,10 @@ function renderOverview(options = {}) {
   applyCapitalHeader();
   applyCumHeader();
   const win = currentWindow();
-  $('pnl-total').textContent = `${win.amount.delta} · ${win.percent.formatted}`;
-  $('pnl-total').className = pillClass(win.percent.formatted, false);
+  $('pnl-kpi').textContent = win.amount ? win.amount.delta : '—';
+  const pnlPct = win.percent ? win.percent.formatted : '—';
+  $('pnl-pct').textContent = pnlPct;
+  $('pnl-pct').className = pillClass(pnlPct, false);
   $('pnl-caption').textContent =
     state.range === '3M' || state.range === '1Y' || state.range === 'All'
       ? 'По месяцам'
@@ -1044,6 +1084,7 @@ function showOpMenu() {
   showError('op-error', '');
   $('op-amount').value = '';
   $('op-name').value = '';
+  toggleBalanceShift('');
 }
 
 function openOp(kind, cardId) {
@@ -1062,6 +1103,7 @@ function openOp(kind, cardId) {
   if (kind !== 'create' && cardId) {
     $('op-card').value = String(cardId);
   }
+  toggleBalanceShift(kind);
   const focusId = kind === 'create' ? 'op-name' : 'op-amount';
   requestAnimationFrame(() => $(focusId).focus());
 }
@@ -1160,6 +1202,8 @@ $('op-menu').addEventListener('click', (event) => {
 });
 
 $('op-back').addEventListener('click', () => showOpMenu());
+
+$('op-card').addEventListener('change', () => syncCurrentBalance());
 
 $('op-form').addEventListener('submit', async (event) => {
   event.preventDefault();
