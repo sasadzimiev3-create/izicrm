@@ -120,7 +120,7 @@ function daysBetweenIso(from, to) {
   return Math.round((utcStamp(to) - utcStamp(from)) / 86400000);
 }
 
-/** Календарное окно кнопок 1W…All, даже если записей меньше. */
+/** Календарное окно кнопки периода: чем режем историю, не ось. */
 function viewRange(today, range, series) {
   const to = today;
   if (range === 'All') {
@@ -131,18 +131,15 @@ function viewRange(today, range, series) {
 }
 
 /**
- * Ось графика. Если история занимает < 20% выбранного окна, приближаем к данным:
- * иначе 1Y с неделей записей — невидимая линия у правого края.
+ * Ось всегда по видимым точкам слева направо.
+ * 1W…1Y только ограничивают, сколько истории взять: пустые месяцы слева не рисуем,
+ * иначе неделя на «1Y» сжимается в полоску у правого края.
  */
 function plotView(today, range, series) {
   const view = viewRange(today, range, series);
-  if (!series || series.length === 0) return view;
-  const first = series[0].date;
-  if (first <= view.from) return view;
-  const viewSpan = Math.max(1, daysBetweenIso(view.from, view.to));
-  const dataSpan = Math.max(1, daysBetweenIso(first, view.to));
-  if (dataSpan / viewSpan >= 0.2) return view;
-  return { from: first, to: view.to };
+  const visible = filterByDate(series, range, today);
+  if (visible.length === 0) return view;
+  return { from: visible[0].date, to: view.to };
 }
 
 function xAtDate(date, from, to, plot) {
@@ -293,15 +290,27 @@ function renderTicks(share) {
   }
 }
 
+function isFrozenMaterial(item) {
+  return item.status === 'frozen';
+}
+
+function frostTag() {
+  return '<span class="frost-tag">заморожен</span>';
+}
+
 function renderMinis(materials) {
   const root = $('asset-minis');
   root.innerHTML = '';
   materials.slice(0, 4).forEach((item, index) => {
+    const frozen = isFrozenMaterial(item);
     const el = document.createElement('div');
-    el.className = 'mini';
-    el.style.borderLeftColor = BANK_COLOR[item.bank] || BANK_COLOR.other;
+    el.className = frozen ? 'mini is-frozen' : 'mini';
+    el.style.borderLeftColor = frozen ? '' : BANK_COLOR[item.bank] || BANK_COLOR.other;
     el.style.animationDelay = `${0.04 * index}s`;
-    el.innerHTML = `<div class="name">${escapeHtml(item.name)}</div><div class="val">${escapeHtml(item.balance.formatted)}</div>`;
+    if (frozen) {
+      el.title = `${item.name} · заморожен`;
+    }
+    el.innerHTML = `<div class="name">${escapeHtml(item.name)}</div><div class="val">${escapeHtml(item.balance.formatted)}</div>${frozen ? frostTag() : ''}`;
     root.append(el);
   });
 }
@@ -314,11 +323,13 @@ function renderWatch(materials) {
     return;
   }
   materials.forEach((item) => {
+    const frozen = isFrozenMaterial(item);
     const el = document.createElement('div');
-    el.className = 'watch';
+    el.className = frozen ? 'watch is-frozen' : 'watch';
     const down = isDown(item.change.formatted);
+    if (frozen) el.title = `${item.name} · заморожен`;
     el.innerHTML = `
-      <div class="sym">${escapeHtml(item.name)}</div>
+      <div class="sym">${escapeHtml(item.name)}${frozen ? frostTag() : ''}</div>
       <div>${escapeHtml(item.balance.formatted)}</div>
       <div class="chg ${down ? 'down' : 'up'}">${escapeHtml(item.change.formatted)}</div>`;
     root.append(el);
@@ -329,13 +340,15 @@ function renderAllocation(materials) {
   const root = $('allocation');
   root.innerHTML = '';
   materials.forEach((item) => {
+    const frozen = isFrozenMaterial(item);
     const pct = item.share.defined ? num(item.share.value) : 0;
     const row = document.createElement('div');
-    row.className = 'alloc-row';
+    row.className = frozen ? 'alloc-row is-frozen' : 'alloc-row';
     const width = `${Math.min(100, Math.max(0, pct))}%`;
+    const barColor = frozen ? '#38bdf8' : BANK_COLOR[item.bank] || BANK_COLOR.other;
     row.innerHTML = `
       <span>${escapeHtml(item.name)}</span>
-      <div class="bar"><span style="width:0;background:${BANK_COLOR[item.bank] || BANK_COLOR.other}"></span></div>
+      <div class="bar"><span style="width:0;background:${barColor}"></span></div>
       <span>${escapeHtml(item.share.formatted)}</span>`;
     root.append(row);
     requestAnimationFrame(() => {
@@ -395,7 +408,7 @@ function renderMaterials() {
   const rows = (state.data.materials || [])
     .map((item) => {
       const frozen = item.status === 'frozen';
-      return `<tr>
+      return `<tr class="${frozen ? 'is-frozen' : ''}">
         <td>${escapeHtml(item.name)}</td>
         <td>${frozen ? 'Заморожен' : 'В работе'}</td>
         <td>${escapeHtml(item.balance.formatted)}</td>
@@ -937,9 +950,9 @@ function renderOverview(options = {}) {
   if (!chartsOnly) {
     $('today-label').textContent = fmtDate(d.today);
     $('updated-label').textContent = d.lastUpdateDate ? `обновлено ${fmtDate(d.lastUpdateDate)}` : '';
-    $('all-time-amount').textContent = d.allTime.amount ? d.allTime.amount.delta : '—';
-    $('all-time-pct').textContent = d.allTime.percent ? d.allTime.percent.formatted : '—';
-    $('all-time-pct').className = pillClass(d.allTime.percent ? d.allTime.percent.formatted : '', false);
+    $('hero-balance').textContent = d.totalCapital ? d.totalCapital.formatted : '—';
+    $('hero-balance-pct').textContent = d.allTime.percent ? d.allTime.percent.formatted : '—';
+    $('hero-balance-pct').className = pillClass(d.allTime.percent ? d.allTime.percent.formatted : '', false);
     $('daily-kpi').textContent = d.daily.formatted || '—';
     $('month-kpi').textContent = d.monthly.amount ? `${d.monthly.amount.delta} (${d.monthly.percent.formatted})` : '—';
     $('work-share').textContent = d.workingShare.formatted;
