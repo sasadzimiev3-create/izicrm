@@ -248,12 +248,16 @@ body {
   border-color: transparent;
 }
 
+.panel {
+  display: grid;
+  gap: 18px;
+}
+
 .hero-grid,
 .bottom-grid,
 .ops-grid {
   display: grid;
   gap: 18px;
-  margin-bottom: 18px;
 }
 
 .hero-grid {
@@ -435,7 +439,8 @@ h2 {
 }
 
 .ticks i.on {
-  background: var(--yellow);
+  background: var(--tick-on, var(--yellow));
+  box-shadow: 0 0 7px color-mix(in srgb, var(--tick-on, var(--yellow)) 55%, transparent);
 }
 
 .mini-grid {
@@ -557,7 +562,6 @@ h2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 18px;
-  margin-bottom: 18px;
   align-items: stretch;
 }
 
@@ -614,6 +618,12 @@ h2 {
   transition: opacity 0.2s ease;
 }
 
+.watchlist {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .watchlist h2,
 .watch-row {
   margin: 0;
@@ -621,12 +631,13 @@ h2 {
 
 .watch-row {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
   gap: 10px;
   margin-top: 12px;
 }
 
 .watch-row.is-crowded {
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
   max-height: 392px;
   overflow-y: auto;
   padding-right: 4px;
@@ -652,6 +663,7 @@ h2 {
   background: #1c1a18;
   border-radius: 16px;
   padding: 12px;
+  min-width: 0;
   min-height: 124px;
   isolation: isolate;
   transition:
@@ -841,6 +853,7 @@ h2 {
   gap: 8px;
   font-weight: 700;
   font-size: 13px;
+  min-width: 0;
 }
 
 .watch .bal {
@@ -1220,6 +1233,10 @@ dialog::backdrop {
   }
 
   .watch-row {
+    grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
+  }
+
+  .watch-row.is-crowded {
     grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
   }
 

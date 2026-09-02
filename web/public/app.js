@@ -288,10 +288,30 @@ function switchTab(tab) {
   }
 }
 
+function mixHex(a, b, t) {
+  const u = Math.min(1, Math.max(0, t));
+  const n = (hex, i) => parseInt(hex.slice(i, i + 2), 16);
+  const ch = (i) => Math.round(n(a, i) + (n(b, i) - n(a, i)) * u).toString(16).padStart(2, '0');
+  return `#${ch(1)}${ch(3)}${ch(5)}`;
+}
+
+function workTickColor(percent) {
+  const p = Math.min(100, Math.max(0, percent));
+  if (p < 40) return mixHex('#e11d48', '#fb7185', p / 40);
+  const mid = (p - 40) / 40;
+  if (p < 80) {
+    return mid < 0.5
+      ? mixHex('#fb923c', '#fbbf24', mid * 2)
+      : mixHex('#fbbf24', '#a3e635', (mid - 0.5) * 2);
+  }
+  return mixHex('#4ade80', '#22c55e', (p - 80) / 20);
+}
+
 function renderTicks(share) {
   const root = $('work-ticks');
   root.innerHTML = '';
   const value = share.defined ? num(share.value) : 0;
+  root.style.setProperty('--tick-on', workTickColor(value));
   for (let i = 0; i < 16; i += 1) {
     const mark = document.createElement('i');
     if (i < Math.round((value / 100) * 16)) mark.className = 'on';
