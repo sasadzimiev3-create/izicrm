@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Silians — кабинет</title>
-    <link rel="stylesheet" href="/app.css?v=13" />
+    <link rel="stylesheet" href="/app.css?v=14" />
   </head>
   <body>
     <div class="shell">
@@ -36,7 +36,6 @@
         <nav class="pill-nav" aria-label="Разделы">
           <button type="button" class="tab is-active" data-tab="overview">Обзор</button>
           <button type="button" class="tab" data-tab="ops">Операции</button>
-          <button type="button" class="tab" data-tab="materials">Материалы</button>
         </nav>
         <div class="top-actions">
           <span id="today-label" class="muted"></span>
@@ -71,7 +70,6 @@
                 <strong id="month-kpi">—</strong>
               </div>
             </div>
-            <div class="mini-grid" id="asset-minis"></div>
           </article>
           <article class="card chart-card">
             <div class="card-head">
@@ -94,9 +92,17 @@
               <canvas id="capital-chart" role="img" aria-label="График капитала"></canvas>
               <div class="chart-tooltip hidden" id="capital-tooltip"></div>
             </div>
-            <p class="chart-hint" id="chart-hint"></p>
-          </article>
+          <p class="chart-hint" id="chart-hint"></p>
+        </article>
         </div>
+
+        <article class="card watchlist">
+          <div class="card-head">
+            <h2>Материалы</h2>
+            <span id="watch-count" class="muted small"></span>
+          </div>
+          <div id="watchlist" class="watch-row"></div>
+        </article>
 
         <article class="card cum-card">
           <div class="card-head">
@@ -129,15 +135,10 @@
           </div>
         </article>
 
-        <article class="card watchlist">
-          <h2>Материалы</h2>
-          <div id="watchlist" class="watch-row"></div>
-        </article>
-
         <div class="bottom-grid">
           <article class="card">
             <h2>Структура капитала</h2>
-            <div id="allocation"></div>
+            <div id="allocation" class="alloc-list"></div>
           </article>
           <article class="card gauge-card">
             <h2>В работе</h2>
@@ -209,14 +210,14 @@
             </form>
           </article>
           <article class="card">
-            <h2>Журнал</h2>
-            <div class="table-wrap">
+            <h2>Журнал действий</h2>
+            <div class="table-wrap journal-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Дата</th>
+                    <th>Время</th>
                     <th>Материал</th>
-                    <th>Тип</th>
+                    <th>Действие</th>
                     <th>Баланс</th>
                     <th>Ввод / вывод</th>
                     <th></th>
@@ -227,14 +228,7 @@
             </div>
           </article>
         </div>
-      </section>
-
-      <section id="panel-materials" class="panel hidden">
-        <article class="card">
-          <h2>В обороте и заморожено</h2>
-          <div id="material-table" class="table-wrap"></div>
-        </article>
-        <article class="card">
+        <article class="card archive-card">
           <h2>Архив</h2>
           <p class="muted small">Только просмотр — вернуть из архива нельзя.</p>
           <ul id="archive-list" class="flow-list"></ul>
@@ -266,6 +260,6 @@
       </form>
     </dialog>
 
-    <script src="/app.js?v=13"></script>
+    <script src="/app.js?v=14"></script>
   </body>
 </html>

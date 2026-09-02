@@ -5,7 +5,6 @@ import type {
   ReportQueryData,
   ReportQueryRepository,
 } from '../../application/ports/report-query-repository.js';
-import type { BalanceEntrySource } from '../../application/ports/balance-repository.js';
 import type { DbTx } from '../../application/ports/unit-of-work.js';
 import type { UserId } from '../../domain/cards/card.js';
 import type { BalanceEntry } from '../../domain/finance/balance.js';
@@ -40,19 +39,56 @@ export class PgReportQueryRepository implements ReportQueryRepository {
 
   async listUserJournal(userId: UserId, tx: DbTx): Promise<JournalEntry[]> {
     const result = await sql<{
+      kind: string;
+      at: Date;
+      date: string | null;
       card_id: string;
-      name: string;
-      effective_date: string;
-      amount: string;
-      capital_in: string;
-      capital_out: string;
-      source: BalanceEntrySource;
+      card_name: string;
+      source: string | null;
+      amount: string | null;
+      capital_in: string | null;
+      capital_out: string | null;
+      archive_reason: string | null;
     }>`
-      SELECT e.card_id, c.name, e.effective_date, e.amount, e.capital_in, e.capital_out, e.source
-      FROM v_current_balance_entries e
+      SELECT
+        'BALANCE'::text AS kind,
+        e.recorded_at AS at,
+        e.effective_date::text AS date,
+        e.card_id::text AS card_id,
+        c.name AS card_name,
+        e.source::text AS source,
+        e.amount::text AS amount,
+        e.capital_in::text AS capital_in,
+        e.capital_out::text AS capital_out,
+        NULL::text AS archive_reason
+      FROM balance_entries e
       JOIN cards c ON c.id = e.card_id AND c.user_id = e.user_id
       WHERE e.user_id = ${userIdParam(userId)}
-      ORDER BY e.effective_date DESC, e.card_id DESC
+
+      UNION ALL
+
+      SELECT
+        CASE a.action
+          WHEN 'CARD_FREEZE' THEN 'FREEZE'
+          WHEN 'CARD_UNFREEZE' THEN 'UNFREEZE'
+          WHEN 'CARD_ARCHIVE' THEN 'ARCHIVE'
+        END AS kind,
+        a.created_at AS at,
+        NULL::text AS date,
+        a.entity_id::text AS card_id,
+        COALESCE(c.name, a.payload->>'name', '') AS card_name,
+        a.action AS source,
+        NULL::text AS amount,
+        NULL::text AS capital_in,
+        NULL::text AS capital_out,
+        a.payload->>'reason' AS archive_reason
+      FROM audit_log a
+      LEFT JOIN cards c ON c.id = a.entity_id AND c.user_id = a.user_id
+      WHERE a.user_id = ${userIdParam(userId)}
+        AND a.action IN ('CARD_FREEZE', 'CARD_UNFREEZE', 'CARD_ARCHIVE')
+        AND a.entity_id IS NOT NULL
+
+      ORDER BY at DESC, card_id DESC
     `.execute(kyselyTx(tx));
     return result.rows.map((row) => toJournalEntry(row));
   }

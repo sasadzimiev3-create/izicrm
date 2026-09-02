@@ -35,6 +35,16 @@ export class FreezeService {
           throw new ValidationError('Материал уже заморожен');
         }
         await this.deps.cards.freezeUserCard(userId, command.cardId, command.frozenOn, tx);
+        await this.deps.audit.appendUserEvent(
+          userId,
+          {
+            action: 'CARD_FREEZE',
+            entity: 'card',
+            entityId: command.cardId,
+            payload: { name: card.name },
+          },
+          tx,
+        );
       }),
     );
   }
@@ -50,6 +60,16 @@ export class FreezeService {
           throw new ValidationError('Материал не заморожен');
         }
         await this.deps.cards.unfreezeUserCard(userId, command.cardId, tx);
+        await this.deps.audit.appendUserEvent(
+          userId,
+          {
+            action: 'CARD_UNFREEZE',
+            entity: 'card',
+            entityId: command.cardId,
+            payload: { name: card.name },
+          },
+          tx,
+        );
       }),
     );
   }

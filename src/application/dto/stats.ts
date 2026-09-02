@@ -4,7 +4,9 @@ import type { BusinessDate } from '../../domain/finance/period.js';
 import type { AllTimePnl, DailyPnl, PeriodPnl } from '../../domain/finance/pnl.js';
 import type { Money } from '../../domain/money/money.js';
 import type { PercentResult } from '../../domain/money/percent.js';
-import type { BalanceEntrySource } from '../ports/balance-repository.js';
+import type { JournalEntry } from '../ports/report-query-repository.js';
+
+export type { JournalEntry };
 
 export type MaterialStatus = 'working' | 'frozen';
 
@@ -39,16 +41,6 @@ export type MonthlyPnlPoint = {
   month: number;
   amount: Money;
   percent: PercentResult;
-};
-
-export type JournalEntry = {
-  cardId: CardId;
-  cardName: string;
-  effectiveDate: BusinessDate;
-  amount: Money;
-  capitalIn: Money;
-  capitalOut: Money;
-  source: BalanceEntrySource;
 };
 
 export type FlowEntry = {

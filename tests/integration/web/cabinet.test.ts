@@ -88,6 +88,95 @@ describe('веб-кабинет и изоляция', () => {
     }
   });
 
+  it('журнал кабинета пишет заморозку по времени и пересчитывает капитал после исправления', async () => {
+    const pool = db.pool();
+    const access = createDataAccess(pool);
+    const services = createAppServices(access);
+    const auth = createWebAuth({
+      secret: 'cabinet-secret',
+      publicUrl: 'http://127.0.0.1',
+      nowFn: () => new Date('2024-08-20T12:00:00+03:00'),
+    });
+    const ownerTg = '88011';
+    const ownerId = parseUserId(await insertUser(pool, ownerTg));
+    const web = await startWebServer(
+      {
+        services,
+        uow: access.uow,
+        users: access.users,
+        clock: createClock(() => new Date('2024-08-20T12:00:00+03:00')),
+        logger: createSafeLogger(() => undefined),
+        auth,
+        publicDir: defaultPublicDir(),
+        botUsername: null,
+        quotes: null,
+      },
+      { host: '127.0.0.1', port: 0 },
+    );
+
+    type OverviewBody = {
+      totalCapital: { amount: string };
+      workingShare: { formatted: string };
+      materials: { id: number; status: string }[];
+      journal: { kind: string; source: string | null; sourceLabel: string; canFix: boolean; at: string }[];
+    };
+
+    try {
+      const base = `http://127.0.0.1:${String(web.port)}`;
+      const cookie = await login(base, auth, ownerId, ownerTg);
+      const created = await fetch(`${base}/api/cards`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ name: 'Сбер 2222', amount: '15000' }),
+      });
+      expect(created.status).toBe(201);
+
+      const beforeFreeze = (await (await fetch(`${base}/api/overview`, { headers: { cookie } })).json()) as OverviewBody;
+      const cardId = beforeFreeze.materials[0]?.id;
+      expect(cardId).toEqual(expect.any(Number));
+      expect(beforeFreeze.journal).toHaveLength(1);
+      expect(beforeFreeze.journal[0]?.kind).toBe('BALANCE');
+
+      const freeze = await fetch(`${base}/api/freeze`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ cardId }),
+      });
+      expect(freeze.status).toBe(200);
+
+      const frozen = (await (await fetch(`${base}/api/overview`, { headers: { cookie } })).json()) as OverviewBody;
+      expect(frozen.materials[0]?.status).toBe('frozen');
+      expect(frozen.journal.map((row) => row.kind)).toEqual(['FREEZE', 'BALANCE']);
+      expect(frozen.journal[0]?.sourceLabel).toBe('Заморозка');
+      expect(frozen.journal[0]?.canFix).toBe(false);
+      expect(frozen.journal[1]?.canFix).toBe(true);
+      expect(Date.parse(frozen.journal[0]?.at ?? '')).toBeGreaterThanOrEqual(Date.parse(frozen.journal[1]?.at ?? ''));
+
+      const unfreeze = await fetch(`${base}/api/unfreeze`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ cardId }),
+      });
+      expect(unfreeze.status).toBe(200);
+
+      const updated = await fetch(`${base}/api/balances`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ cardId, amount: '16500' }),
+      });
+      expect(updated.status).toBe(200);
+
+      const after = (await (await fetch(`${base}/api/overview`, { headers: { cookie } })).json()) as OverviewBody;
+      expect(after.totalCapital.amount).toBe('16500.00');
+      expect(after.materials[0]?.status).toBe('working');
+      expect(after.journal.map((row) => row.kind)).toEqual(['BALANCE', 'UNFREEZE', 'FREEZE', 'BALANCE']);
+      expect(after.journal.some((row) => row.source === 'CORRECTION')).toBe(true);
+      expect(after.journal[0]?.sourceLabel).toBe('Исправление');
+    } finally {
+      await web.close();
+    }
+  });
+
   it('котировка USDT/RUB приходит из порта строками; без источника — пустые цены, не 5xx', async () => {
     const pool = db.pool();
     const access = createDataAccess(pool);

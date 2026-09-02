@@ -45,7 +45,7 @@ export class ArchiveService {
   async archive(userId: UserId, command: ArchiveCommand): Promise<Applied<void>> {
     return this.deps.uow.withUser(userId, (tx) =>
       once(this.deps.processed, userId, command.idempotencyKey, tx, async () => {
-        await requireActiveCard(
+        const card = await requireActiveCard(
           this.deps.cards,
           userId,
           command.cardId,
@@ -60,18 +60,8 @@ export class ArchiveService {
           tx,
         );
 
-        if (locf.amount.isZero()) {
-          await this.deps.cards.archiveUserCard(
-            userId,
-            command.cardId,
-            command.archivedOn,
-            'WITHDRAWN',
-            tx,
-          );
-          return;
-        }
-
-        if (command.reason === 'TRANSFERRED') {
+        const reason = locf.amount.isZero() ? 'WITHDRAWN' : command.reason;
+        if (!locf.amount.isZero() && command.reason === 'TRANSFERRED') {
           await this.transferRemainder(userId, command, locf.amount, tx);
         }
 
@@ -79,7 +69,17 @@ export class ArchiveService {
           userId,
           command.cardId,
           command.archivedOn,
-          command.reason,
+          reason,
+          tx,
+        );
+        await this.deps.audit.appendUserEvent(
+          userId,
+          {
+            action: 'CARD_ARCHIVE',
+            entity: 'card',
+            entityId: command.cardId,
+            payload: { name: card.name, reason },
+          },
           tx,
         );
       }),

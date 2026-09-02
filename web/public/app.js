@@ -11,6 +11,7 @@ const WINDOW_LOOKBACK = { '1W': 6, '1M': 29, '3M': 89, '1Y': 364 };
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 const NARROW = '\u202F';
 const QUOTE_MS = 15_000;
+const CROWDED_WATCH = 10;
 
 const state = {
   data: null,
@@ -41,6 +42,15 @@ function fmtDate(iso) {
   if (!iso) return '—';
   const [y, m, d] = iso.split('-');
   return `${d}.${m}.${y}`;
+}
+
+function fmtDateTime(iso) {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  const day = date.toLocaleDateString('ru-RU');
+  const time = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  return `${day} ${time}`;
 }
 
 function fmtDateShort(iso) {
@@ -273,7 +283,6 @@ function switchTab(tab) {
   });
   $('panel-overview').classList.toggle('hidden', tab !== 'overview');
   $('panel-ops').classList.toggle('hidden', tab !== 'ops');
-  $('panel-materials').classList.toggle('hidden', tab !== 'materials');
   if (tab === 'overview' && state.data) {
     requestAnimationFrame(() => renderOverview({ animate: true }));
   }
@@ -298,26 +307,18 @@ function frostTag() {
   return '<span class="frost-tag">заморожен</span>';
 }
 
-function renderMinis(materials) {
-  const root = $('asset-minis');
-  root.innerHTML = '';
-  materials.slice(0, 4).forEach((item, index) => {
-    const frozen = isFrozenMaterial(item);
-    const el = document.createElement('div');
-    el.className = frozen ? 'mini is-frozen' : 'mini';
-    el.style.borderLeftColor = frozen ? '' : BANK_COLOR[item.bank] || BANK_COLOR.other;
-    el.style.animationDelay = `${0.04 * index}s`;
-    if (frozen) {
-      el.title = `${item.name} · заморожен`;
-    }
-    el.innerHTML = `<div class="name">${escapeHtml(item.name)}</div><div class="val">${escapeHtml(item.balance.formatted)}</div>${frozen ? frostTag() : ''}`;
-    root.append(el);
-  });
+function closeWatchActions() {
+  document.querySelectorAll('.watch.is-open').forEach((el) => el.classList.remove('is-open'));
 }
 
 function renderWatch(materials) {
   const root = $('watchlist');
+  const count = $('watch-count');
   root.innerHTML = '';
+  root.classList.toggle('is-crowded', materials.length > CROWDED_WATCH);
+  if (count) {
+    count.textContent = materials.length === 0 ? '' : `${materials.length}`;
+  }
   if (materials.length === 0) {
     root.innerHTML = '<p class="muted">Пока нет материалов</p>';
     return;
@@ -326,12 +327,27 @@ function renderWatch(materials) {
     const frozen = isFrozenMaterial(item);
     const el = document.createElement('div');
     el.className = frozen ? 'watch is-frozen' : 'watch';
+    el.dataset.cardId = String(item.id);
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
     const down = isDown(item.change.formatted);
-    if (frozen) el.title = `${item.name} · заморожен`;
+    const bank = BANK_COLOR[item.bank] || BANK_COLOR.other;
+    if (!frozen) el.style.setProperty('--bank', bank);
+    el.title = frozen ? `${item.name} · заморожен` : item.name;
+    const primary = frozen
+      ? `<button type="button" class="watch-act restore" data-unfreeze="${item.id}">Вернуть</button>`
+      : `<button type="button" class="watch-act frost" data-freeze="${item.id}">Заморозить</button>`;
     el.innerHTML = `
-      <div class="sym">${escapeHtml(item.name)}${frozen ? frostTag() : ''}</div>
-      <div>${escapeHtml(item.balance.formatted)}</div>
-      <div class="chg ${down ? 'down' : 'up'}">${escapeHtml(item.change.formatted)}</div>`;
+      <div class="watch-veil" aria-hidden="true"></div>
+      <div class="watch-body">
+        <div class="sym">${escapeHtml(item.name)}${frozen ? frostTag() : ''}</div>
+        <div class="bal">${escapeHtml(item.balance.formatted)}</div>
+        <div class="chg ${down ? 'down' : 'up'}">${escapeHtml(item.change.formatted)}</div>
+      </div>
+      <div class="watch-actions">
+        ${primary}
+        <button type="button" class="watch-act remove" data-archive="${item.id}">Удалить</button>
+      </div>`;
     root.append(el);
   });
 }
@@ -339,6 +355,7 @@ function renderWatch(materials) {
 function renderAllocation(materials) {
   const root = $('allocation');
   root.innerHTML = '';
+  root.classList.toggle('is-crowded', materials.length > CROWDED_WATCH);
   materials.forEach((item) => {
     const frozen = isFrozenMaterial(item);
     const pct = item.share.defined ? num(item.share.value) : 0;
@@ -384,44 +401,40 @@ function fillCardSelects() {
 function renderJournal() {
   const body = $('journal');
   body.innerHTML = '';
-  (state.data.journal || []).forEach((row) => {
+  const activeIds = new Set((state.data.materials || []).map((item) => item.id));
+  const rows = state.data.journal || [];
+  if (rows.length === 0) {
+    body.innerHTML = '<tr><td colspan="6" class="muted">Пока нет действий</td></tr>';
+    return;
+  }
+  rows.forEach((row) => {
     const tr = document.createElement('tr');
-    const flow =
-      num(row.capitalIn.amount) > 0
-        ? `+ ${row.capitalIn.formatted}`
-        : num(row.capitalOut.amount) > 0
-          ? `− ${row.capitalOut.formatted}`
-          : '—';
+    const kindClass =
+      row.kind === 'FREEZE'
+        ? 'journal-row is-freeze'
+        : row.kind === 'UNFREEZE'
+          ? 'journal-row is-unfreeze'
+          : row.kind === 'ARCHIVE'
+            ? 'journal-row is-archive'
+            : 'journal-row';
+    tr.className = kindClass;
+    const inAmt = row.capitalIn && num(row.capitalIn.amount) > 0 ? `+ ${row.capitalIn.formatted}` : '';
+    const outAmt = row.capitalOut && num(row.capitalOut.amount) > 0 ? `− ${row.capitalOut.formatted}` : '';
+    const flow = inAmt || outAmt || '—';
+    const amount = row.amount ? row.amount.formatted : '—';
+    const canFix = Boolean(row.canFix) && activeIds.has(row.cardId);
     tr.innerHTML = `
-      <td>${escapeHtml(fmtDate(row.date))}</td>
+      <td>${escapeHtml(fmtDateTime(row.at))}</td>
       <td>${escapeHtml(row.cardName)}</td>
       <td>${escapeHtml(row.sourceLabel)}</td>
-      <td>${escapeHtml(row.amount.formatted)}</td>
+      <td>${escapeHtml(amount)}</td>
       <td>${escapeHtml(flow)}</td>
-      <td><button type="button" class="linkish" data-fix="${row.cardId}">Исправить</button></td>`;
+      <td>${canFix ? `<button type="button" class="linkish" data-fix="${row.cardId}">Исправить</button>` : ''}</td>`;
     body.append(tr);
   });
 }
 
-function renderMaterials() {
-  const wrap = $('material-table');
-  const rows = (state.data.materials || [])
-    .map((item) => {
-      const frozen = item.status === 'frozen';
-      return `<tr class="${frozen ? 'is-frozen' : ''}">
-        <td>${escapeHtml(item.name)}</td>
-        <td>${frozen ? 'Заморожен' : 'В работе'}</td>
-        <td>${escapeHtml(item.balance.formatted)}</td>
-        <td>${escapeHtml(item.change.formatted)}</td>
-        <td>
-          ${frozen ? `<button type="button" class="linkish" data-unfreeze="${item.id}">Вернуть</button>` : `<button type="button" class="linkish" data-freeze="${item.id}">Заморозить</button>`}
-          <button type="button" class="linkish" data-archive="${item.id}">Удалить</button>
-        </td>
-      </tr>`;
-    })
-    .join('');
-  wrap.innerHTML = `<table><thead><tr><th>Материал</th><th>Статус</th><th>Баланс</th><th>Изменение</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="5">Пусто</td></tr>'}</tbody></table>`;
-
+function renderArchive() {
   const arch = $('archive-list');
   arch.innerHTML = '';
   const archived = state.data.archived || [];
@@ -431,7 +444,8 @@ function renderMaterials() {
   }
   archived.forEach((row) => {
     const li = document.createElement('li');
-    li.innerHTML = `<span>${escapeHtml(row.name)} · ${escapeHtml(fmtDate(row.archivedOn))}</span><span>${escapeHtml(row.reason)}</span>`;
+    const reason = row.reasonLabel || row.reason;
+    li.innerHTML = `<span>${escapeHtml(row.name)} · ${escapeHtml(fmtDate(row.archivedOn))}</span><span>${escapeHtml(reason)}</span>`;
     arch.append(li);
   });
 }
@@ -959,7 +973,6 @@ function renderOverview(options = {}) {
     $('work-amount').textContent = d.workingCapital.formatted;
     $('frozen-line').textContent = d.frozenCapital.amount === '0.00' ? '' : `Заморожено ${d.frozenCapital.formatted}`;
     renderTicks(d.workingShare);
-    renderMinis(d.materials);
     renderWatch(d.materials);
     renderAllocation(d.materials);
     renderFlows(d.flows);
@@ -988,7 +1001,7 @@ function renderAll() {
   renderOverview({ animate: true });
   fillCardSelects();
   renderJournal();
-  renderMaterials();
+  renderArchive();
 }
 
 async function reload() {
@@ -1200,28 +1213,56 @@ $('logout').addEventListener('click', async () => {
 $('journal').addEventListener('click', (event) => {
   const btn = event.target.closest('[data-fix]');
   if (!btn) return;
-  $('op-kind').value = 'update';
   openOp('update', btn.dataset.fix);
   switchTab('ops');
 });
 
-$('material-table').addEventListener('click', async (event) => {
+$('watchlist').addEventListener('click', async (event) => {
   const freeze = event.target.closest('[data-freeze]');
   const unfreeze = event.target.closest('[data-unfreeze]');
   const archive = event.target.closest('[data-archive]');
+  const tile = event.target.closest('.watch');
   try {
     if (freeze) {
+      event.stopPropagation();
       await api('/api/freeze', { method: 'POST', body: JSON.stringify({ cardId: Number(freeze.dataset.freeze) }) });
       await reload();
-    } else if (unfreeze) {
+      return;
+    }
+    if (unfreeze) {
+      event.stopPropagation();
       await api('/api/unfreeze', { method: 'POST', body: JSON.stringify({ cardId: Number(unfreeze.dataset.unfreeze) }) });
       await reload();
-    } else if (archive) {
+      return;
+    }
+    if (archive) {
+      event.stopPropagation();
       openArchive(Number(archive.dataset.archive));
+      return;
     }
   } catch (error) {
     alert(error.message);
+    return;
   }
+  if (!tile) return;
+  const open = tile.classList.contains('is-open');
+  closeWatchActions();
+  if (!open) tile.classList.add('is-open');
+});
+
+$('watchlist').addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  const tile = event.target.closest('.watch');
+  if (!tile || event.target.closest('.watch-act')) return;
+  event.preventDefault();
+  const open = tile.classList.contains('is-open');
+  closeWatchActions();
+  if (!open) tile.classList.add('is-open');
+});
+
+document.addEventListener('click', (event) => {
+  if (event.target.closest('#watchlist') || event.target.closest('dialog')) return;
+  closeWatchActions();
 });
 
 function openArchive(cardId) {

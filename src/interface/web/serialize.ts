@@ -4,8 +4,9 @@ import type { AllTimePnl, DailyPnl, PeriodPnl } from '../../domain/finance/pnl.j
 import { formatMoney, formatMoneyDelta, formatPercent, formatSharePercent } from '../../domain/money/format.js';
 import { Decimal, type Money } from '../../domain/money/money.js';
 import type { PercentResult } from '../../domain/money/percent.js';
+import type { ArchiveReason } from '../../domain/cards/card.js';
 import type { BalanceEntrySource } from '../../application/ports/balance-repository.js';
-import type { StatsSnapshot } from '../../application/dto/stats.js';
+import type { JournalEntry, StatsSnapshot } from '../../application/dto/stats.js';
 
 const EM_DASH = '\u2014';
 
@@ -18,6 +19,40 @@ const SOURCE_LABEL: Record<BalanceEntrySource, string> = {
   ARCHIVE_TRANSFER_IN: 'Перевод',
   ARCHIVE_ZERO_OUT: 'Обнуление',
 };
+
+const KIND_LABEL = {
+  FREEZE: 'Заморозка',
+  UNFREEZE: 'Разморозка',
+  ARCHIVE: 'Удаление',
+} as const;
+
+const ARCHIVE_REASON_LABEL: Record<ArchiveReason, string> = {
+  WITHDRAWN: 'вывел',
+  TRANSFERRED: 'перевод',
+  LOST: 'потеря',
+};
+
+const FIXABLE_SOURCES = new Set<BalanceEntrySource>([
+  'CARD_CREATED',
+  'DAILY_UPDATE',
+  'TOP_UP',
+  'SPEND',
+  'CORRECTION',
+]);
+
+function journalLabel(row: JournalEntry): string {
+  if (row.kind === 'BALANCE' && row.source !== null) {
+    return SOURCE_LABEL[row.source];
+  }
+  if (row.kind === 'ARCHIVE') {
+    const extra = row.archiveReason ? ARCHIVE_REASON_LABEL[row.archiveReason] : '';
+    return extra === '' ? KIND_LABEL.ARCHIVE : `${KIND_LABEL.ARCHIVE} · ${extra}`;
+  }
+  if (row.kind === 'FREEZE' || row.kind === 'UNFREEZE') {
+    return KIND_LABEL[row.kind];
+  }
+  return row.kind;
+}
 
 export type MoneyView = {
   amount: string;
@@ -172,14 +207,17 @@ export function serializeSnapshot(snapshot: StatsSnapshot): Record<string, unkno
       }),
     ),
     journal: snapshot.journal.map((row) => ({
+      kind: row.kind,
+      at: row.at.toISOString(),
       cardId: row.cardId,
       cardName: row.cardName,
       date: row.effectiveDate,
-      amount: moneyView(row.amount),
-      capitalIn: moneyView(row.capitalIn),
-      capitalOut: moneyView(row.capitalOut),
+      amount: row.amount ? moneyView(row.amount) : null,
+      capitalIn: row.capitalIn ? moneyView(row.capitalIn) : null,
+      capitalOut: row.capitalOut ? moneyView(row.capitalOut) : null,
       source: row.source,
-      sourceLabel: SOURCE_LABEL[row.source],
+      sourceLabel: journalLabel(row),
+      canFix: row.kind === 'BALANCE' && row.source !== null && FIXABLE_SOURCES.has(row.source),
     })),
     flows: snapshot.flows.map((row) => ({
       cardId: row.cardId,
@@ -194,6 +232,7 @@ export function serializeSnapshot(snapshot: StatsSnapshot): Record<string, unkno
       name: row.name,
       archivedOn: row.archivedOn,
       reason: row.archiveReason,
+      reasonLabel: ARCHIVE_REASON_LABEL[row.archiveReason],
     })),
   };
 }

@@ -1,4 +1,4 @@
-import type { CardId, UserId } from '../../domain/cards/card.js';
+import type { ArchiveReason, CardId, UserId } from '../../domain/cards/card.js';
 import type { BalanceEntry } from '../../domain/finance/balance.js';
 import type { BusinessDate } from '../../domain/finance/period.js';
 import type { Money } from '../../domain/money/money.js';
@@ -18,14 +18,19 @@ export type ReportQueryData = {
   flows: CapitalFlowRow[];
 };
 
+export type JournalKind = 'BALANCE' | 'FREEZE' | 'UNFREEZE' | 'ARCHIVE';
+
 export type JournalEntry = {
+  kind: JournalKind;
+  at: Date;
   cardId: CardId;
   cardName: string;
-  effectiveDate: BusinessDate;
-  amount: Money;
-  capitalIn: Money;
-  capitalOut: Money;
-  source: BalanceEntrySource;
+  effectiveDate: BusinessDate | null;
+  amount: Money | null;
+  capitalIn: Money | null;
+  capitalOut: Money | null;
+  source: BalanceEntrySource | null;
+  archiveReason: ArchiveReason | null;
 };
 
 export interface ReportQueryRepository {

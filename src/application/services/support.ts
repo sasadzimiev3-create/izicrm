@@ -1,3 +1,4 @@
+import type { AuditLogRepository } from '../ports/audit-log-repository.js';
 import type { BalanceRepository, LocfBalance } from '../ports/balance-repository.js';
 import type { CardRepository, CardRow } from '../ports/card-repository.js';
 import type { ProcessedUpdateRepository } from '../ports/processed-update-repository.js';
@@ -15,6 +16,7 @@ export type ServiceDeps = {
   balances: BalanceRepository;
   reports: ReportQueryRepository;
   processed: ProcessedUpdateRepository;
+  audit: AuditLogRepository;
 };
 
 export const NOT_FOUND = 'Материал не найден';

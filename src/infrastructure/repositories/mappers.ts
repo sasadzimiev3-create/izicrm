@@ -1,6 +1,6 @@
 import type { CardRow, CapitalFlowRow } from '../../application/ports/card-repository.js';
-import type { LocfBalance } from '../../application/ports/balance-repository.js';
-import type { JournalEntry } from '../../application/ports/report-query-repository.js';
+import type { BalanceEntrySource, LocfBalance } from '../../application/ports/balance-repository.js';
+import type { JournalEntry, JournalKind } from '../../application/ports/report-query-repository.js';
 import type { DialogStateRecord } from '../../application/ports/dialog-state-repository.js';
 import type { UserRecord } from '../../application/ports/user-repository.js';
 import type { ArchiveReason } from '../../domain/cards/card.js';
@@ -80,23 +80,60 @@ export function toBalanceEntry(row: {
 }
 
 export function toJournalEntry(row: {
+  kind: string;
+  at: Date | string;
+  date: string | null;
   card_id: string;
-  name: string;
-  effective_date: string;
-  amount: string;
-  capital_in: string;
-  capital_out: string;
-  source: JournalEntry['source'];
+  card_name: string;
+  source: string | null;
+  amount: string | null;
+  capital_in: string | null;
+  capital_out: string | null;
+  archive_reason: string | null;
 }): JournalEntry {
+  const kind = asJournalKind(row.kind);
+  const money = kind === 'BALANCE';
   return {
+    kind,
+    at: row.at instanceof Date ? row.at : new Date(row.at),
     cardId: parseCardId(row.card_id),
-    cardName: row.name,
-    effectiveDate: parseBusinessDate(row.effective_date),
-    amount: toMoney(row.amount),
-    capitalIn: toMoney(row.capital_in),
-    capitalOut: toMoney(row.capital_out),
-    source: row.source,
+    cardName: row.card_name,
+    effectiveDate: row.date === null ? null : parseBusinessDate(row.date),
+    amount: money && row.amount !== null ? toMoney(row.amount) : null,
+    capitalIn: money && row.capital_in !== null ? toMoney(row.capital_in) : null,
+    capitalOut: money && row.capital_out !== null ? toMoney(row.capital_out) : null,
+    source: money ? asBalanceSource(row.source) : null,
+    archiveReason: kind === 'ARCHIVE' ? asArchiveReason(row.archive_reason) : null,
   };
+}
+
+function asJournalKind(value: string): JournalKind {
+  if (value === 'BALANCE' || value === 'FREEZE' || value === 'UNFREEZE' || value === 'ARCHIVE') {
+    return value;
+  }
+  throw new Error(`unknown journal kind: ${value}`);
+}
+
+function asBalanceSource(value: string | null): BalanceEntrySource {
+  if (
+    value === 'CARD_CREATED' ||
+    value === 'DAILY_UPDATE' ||
+    value === 'TOP_UP' ||
+    value === 'SPEND' ||
+    value === 'CORRECTION' ||
+    value === 'ARCHIVE_TRANSFER_IN' ||
+    value === 'ARCHIVE_ZERO_OUT'
+  ) {
+    return value;
+  }
+  throw new Error(`unknown balance source: ${value ?? 'null'}`);
+}
+
+function asArchiveReason(value: string | null): ArchiveReason {
+  if (value === 'WITHDRAWN' || value === 'TRANSFERRED' || value === 'LOST') {
+    return value;
+  }
+  throw new Error(`unknown archive reason: ${value ?? 'null'}`);
 }
 
 export function toCapitalFlowRow(row: {
