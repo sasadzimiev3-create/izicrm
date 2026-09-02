@@ -412,37 +412,6 @@ h2 {
   color: #fff;
 }
 
-.health {
-  text-align: right;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.health strong {
-  display: block;
-  color: var(--ink);
-  font-size: 20px;
-}
-
-.ticks {
-  display: flex;
-  gap: 3px;
-  justify-content: flex-end;
-  margin-top: 6px;
-}
-
-.ticks i {
-  width: 4px;
-  height: 14px;
-  border-radius: 2px;
-  background: #2a2724;
-}
-
-.ticks i.on {
-  background: var(--tick-on, var(--yellow));
-  box-shadow: 0 0 7px color-mix(in srgb, var(--tick-on, var(--yellow)) 55%, transparent);
-}
-
 .mini-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1175,7 +1144,7 @@ dialog::backdrop {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  margin: -6px 0 16px;
+  margin: -6px 0 0;
 }
 
 .stat-pill {
@@ -1188,6 +1157,17 @@ dialog::backdrop {
   display: block;
   margin-top: 4px;
   font-size: 14px;
+}
+
+.stat-pill.is-frozen {
+  background:
+    linear-gradient(165deg, var(--ice-dim) 0%, transparent 52%),
+    #171b1f;
+  box-shadow: inset 3px 0 0 var(--ice);
+}
+
+.stat-pill.is-frozen strong {
+  color: #e0f2fe;
 }
 
 .chart-panel .card-head {
@@ -1247,10 +1227,6 @@ dialog::backdrop {
 .top-actions {
   flex-wrap: wrap;
   justify-content: flex-end;
-}
-
-.ticks i {
-  transition: background 0.35s ease;
 }
 
 .mini {

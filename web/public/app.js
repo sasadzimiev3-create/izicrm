@@ -288,37 +288,6 @@ function switchTab(tab) {
   }
 }
 
-function mixHex(a, b, t) {
-  const u = Math.min(1, Math.max(0, t));
-  const n = (hex, i) => parseInt(hex.slice(i, i + 2), 16);
-  const ch = (i) => Math.round(n(a, i) + (n(b, i) - n(a, i)) * u).toString(16).padStart(2, '0');
-  return `#${ch(1)}${ch(3)}${ch(5)}`;
-}
-
-function workTickColor(percent) {
-  const p = Math.min(100, Math.max(0, percent));
-  if (p < 40) return mixHex('#e11d48', '#fb7185', p / 40);
-  const mid = (p - 40) / 40;
-  if (p < 80) {
-    return mid < 0.5
-      ? mixHex('#fb923c', '#fbbf24', mid * 2)
-      : mixHex('#fbbf24', '#a3e635', (mid - 0.5) * 2);
-  }
-  return mixHex('#4ade80', '#22c55e', (p - 80) / 20);
-}
-
-function renderTicks(share) {
-  const root = $('work-ticks');
-  root.innerHTML = '';
-  const value = share.defined ? num(share.value) : 0;
-  root.style.setProperty('--tick-on', workTickColor(value));
-  for (let i = 0; i < 16; i += 1) {
-    const mark = document.createElement('i');
-    if (i < Math.round((value / 100) * 16)) mark.className = 'on';
-    root.append(mark);
-  }
-}
-
 function isFrozenMaterial(item) {
   return item.status === 'frozen';
 }
@@ -658,7 +627,7 @@ function drawCapitalFrame(progress) {
     charts.capitalLayout = null;
     ctx.fillStyle = 'rgba(255,255,255,0.75)';
     ctx.font = '13px "Segoe UI", system-ui, sans-serif';
-    ctx.fillText('Пока нет точек капитала', plotBase.x0, plotBase.y0 + 24);
+    ctx.fillText('Пока нет точек баланса', plotBase.x0, plotBase.y0 + 24);
     return;
   }
   const values = points.map((p) => num(p.capital));
@@ -1032,10 +1001,10 @@ function renderOverview(options = {}) {
     $('hero-balance').textContent = d.totalCapital ? d.totalCapital.formatted : '—';
     $('hero-balance-pct').textContent = d.allTime.percent ? d.allTime.percent.formatted : '—';
     $('hero-balance-pct').className = pillClass(d.allTime.percent ? d.allTime.percent.formatted : '', false);
+    $('frozen-kpi').textContent = d.frozenCapital ? d.frozenCapital.formatted : '—';
+    $('working-kpi').textContent = d.workingCapital ? d.workingCapital.formatted : '—';
     $('daily-kpi').textContent = d.daily.formatted || '—';
     $('month-kpi').textContent = d.monthly.amount ? `${d.monthly.amount.delta} (${d.monthly.percent.formatted})` : '—';
-    $('work-share').textContent = d.workingShare.formatted;
-    renderTicks(d.workingShare);
     renderWatch(liveMaterials());
     renderAllocation(liveMaterials());
     renderFlows(d.flows);
