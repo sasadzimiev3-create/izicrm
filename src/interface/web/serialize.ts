@@ -156,6 +156,12 @@ export function serializeSnapshot(snapshot: StatsSnapshot): Record<string, unkno
     workingCapital: moneyView(snapshot.workingCapital),
     frozenCapital: moneyView(snapshot.frozenCapital),
     workingShare: shareView(snapshot.workingShare),
+    inOut: {
+      deposits: moneyView(snapshot.inOut.deposits),
+      withdrawals: moneyView(snapshot.inOut.withdrawals),
+      depositShare: shareView(snapshot.inOut.depositShare),
+      withdrawalShare: shareView(snapshot.inOut.withdrawalShare),
+    },
     daily: dailyView(snapshot.daily),
     monthly: periodView(snapshot.monthly),
     allTime: allTimeView(snapshot.allTime),

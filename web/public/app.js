@@ -968,25 +968,27 @@ function drawPnlFrame() {
   });
 }
 
-function drawGauge(canvas, share) {
-  canvas.style.width = '220px';
-  canvas.style.height = '140px';
-  const { ctx, width, height } = sizeCanvas(canvas);
-  ctx.clearRect(0, 0, width, height);
-  const cx = width / 2;
-  const cy = height - 18;
-  const r = Math.min(88, width / 2 - 16);
-  ctx.lineWidth = 14;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.strokeStyle = '#2a2724';
-  ctx.arc(cx, cy, r, Math.PI, 0);
-  ctx.stroke();
-  const pct = share.defined ? Math.min(100, Math.max(0, num(share.value))) / 100 : 0;
-  ctx.beginPath();
-  ctx.strokeStyle = '#22c55e';
-  ctx.arc(cx, cy, r, Math.PI, Math.PI + Math.PI * pct);
-  ctx.stroke();
+function renderInOut(io) {
+  const deposits = io?.deposits;
+  const withdrawals = io?.withdrawals;
+  const inShare = io?.depositShare || { defined: false, formatted: '—' };
+  const outShare = io?.withdrawalShare || { defined: false, formatted: '—' };
+  $('in-pct').textContent = inShare.formatted;
+  $('out-pct').textContent = outShare.formatted;
+  $('in-amount').textContent = deposits ? deposits.formatted : '—';
+  $('out-amount').textContent = withdrawals ? withdrawals.formatted : '—';
+  const inPct = inShare.defined ? Math.min(100, Math.max(0, num(inShare.value))) : 0;
+  const outPct = outShare.defined ? Math.min(100, Math.max(0, num(outShare.value))) : 0;
+  const empty = inPct === 0 && outPct === 0;
+  const ring = $('io-ring');
+  ring.classList.toggle('is-empty', empty);
+  ring.classList.toggle('is-in-only', !empty && outPct === 0);
+  ring.classList.toggle('is-out-only', !empty && inPct === 0);
+  ring.style.setProperty('--in-pct', `${inPct}%`);
+  ring.setAttribute(
+    'aria-label',
+    `Ввод ${inShare.formatted}, ${deposits ? deposits.formatted : '—'}; вывод ${outShare.formatted}, ${withdrawals ? withdrawals.formatted : '—'}`,
+  );
 }
 
 function placeTooltip(el, canvas, clientX, clientY, html) {
@@ -1033,13 +1035,11 @@ function renderOverview(options = {}) {
     $('daily-kpi').textContent = d.daily.formatted || '—';
     $('month-kpi').textContent = d.monthly.amount ? `${d.monthly.amount.delta} (${d.monthly.percent.formatted})` : '—';
     $('work-share').textContent = d.workingShare.formatted;
-    $('work-amount').textContent = d.workingCapital.formatted;
-    $('frozen-line').textContent = d.frozenCapital.amount === '0.00' ? '' : `Заморожено ${d.frozenCapital.formatted}`;
     renderTicks(d.workingShare);
     renderWatch(liveMaterials());
     renderAllocation(liveMaterials());
     renderFlows(d.flows);
-    drawGauge($('gauge'), d.workingShare);
+    renderInOut(d.inOut);
   }
   applyCapitalHeader();
   applyCumHeader();

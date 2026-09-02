@@ -63,9 +63,16 @@ describe('веб-кабинет и изоляция', () => {
 
       const overview = await fetch(`${base}/api/overview`, { headers: { cookie: ownerCookie } });
       expect(overview.status).toBe(200);
-      const body = (await overview.json()) as { totalCapital: { amount: string }; journal: unknown[] };
+      const body = (await overview.json()) as {
+        totalCapital: { amount: string };
+        journal: unknown[];
+        inOut: { deposits: { amount: string }; withdrawals: { amount: string }; depositShare: { formatted: string } };
+      };
       expect(body.totalCapital.amount).toBe('15000.00');
       expect(body.journal).toHaveLength(1);
+      expect(body.inOut.deposits.amount).toBe('15000.00');
+      expect(body.inOut.withdrawals.amount).toBe('0.00');
+      expect(body.inOut.depositShare.formatted).toBe('100.00%');
 
       const strangerCookie = await login(base, auth, strangerId, strangerTg);
       const strangerView = await fetch(`${base}/api/overview`, { headers: { cookie: strangerCookie } });

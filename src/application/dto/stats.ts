@@ -68,6 +68,14 @@ export type WindowPnl = {
   closing: Money;
 };
 
+/** Внешний оборот за всё время: ввод (`Σ I`) и вывод (`Σ O` + `WITHDRAWN`). */
+export type CapitalInOut = {
+  deposits: Money;
+  withdrawals: Money;
+  depositShare: PercentResult;
+  withdrawalShare: PercentResult;
+};
+
 /**
  * Снимок кабинета: те же формулы, что Telegram и Excel (`periodPnl`).
  *
@@ -80,6 +88,7 @@ export type StatsSnapshot = {
   workingCapital: Money;
   frozenCapital: Money;
   workingShare: PercentResult;
+  inOut: CapitalInOut;
   daily: DailyPnl;
   monthly: PeriodPnl;
   allTime: AllTimePnl;

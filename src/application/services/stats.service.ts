@@ -10,13 +10,14 @@ import {
   type BusinessDate,
 } from '../../domain/finance/period.js';
 import { allTimePnl, dailyPnl, monthlyPnl, periodPnl } from '../../domain/finance/pnl.js';
-import { netDeposits } from '../../domain/finance/flows.js';
+import { netDeposits, signedFlows } from '../../domain/finance/flows.js';
 import { percentChange, type PercentResult } from '../../domain/money/percent.js';
 import { Money } from '../../domain/money/money.js';
 import type { Card, UserId } from '../../domain/cards/card.js';
 
 import type {
   ArchivedMaterial,
+  CapitalInOut,
   CapitalPoint,
   CumulativePnlPoint,
   DailyPnlPoint,
@@ -127,6 +128,41 @@ export function shareOf(part: Money, whole: Money): PercentResult {
   return { defined: true, value: part.toDecimal().div(whole.toDecimal()).mul(100) };
 }
 
+/**
+ * Ввод/вывод за всё время: `Σ I` и `Σ (O + Withdrawal)` из `signedFlows`.
+ * Доли — `shareOf` от суммы двух, не доходность и не P&L.
+ *
+ * @see docs/financial-model.md §4.3
+ */
+function capitalInOut(ledger: Ledger, today: BusinessDate): CapitalInOut {
+  const indexed = indexLedger(ledger);
+  const first = firstEntryDate(indexed);
+  if (first === undefined) {
+    return {
+      deposits: Money.zero(),
+      withdrawals: Money.zero(),
+      depositShare: { defined: false, reason: 'ZERO_BASE' },
+      withdrawalShare: { defined: false, reason: 'ZERO_BASE' },
+    };
+  }
+  let deposits = Money.zero();
+  let withdrawals = Money.zero();
+  for (const flow of signedFlows(indexed, first, today)) {
+    if (flow.amount.isPositive()) {
+      deposits = deposits.plus(flow.amount);
+    } else if (flow.amount.isNegative()) {
+      withdrawals = withdrawals.plus(flow.amount.abs());
+    }
+  }
+  const turnover = deposits.plus(withdrawals);
+  return {
+    deposits,
+    withdrawals,
+    depositShare: shareOf(deposits, turnover),
+    withdrawalShare: shareOf(withdrawals, turnover),
+  };
+}
+
 function eachDate(from: BusinessDate, to: BusinessDate): BusinessDate[] {
   const dates: BusinessDate[] = [];
   let cursor = from;
@@ -183,6 +219,7 @@ export function buildStatsFromLedger(
   | 'workingCapital'
   | 'frozenCapital'
   | 'workingShare'
+  | 'inOut'
   | 'daily'
   | 'monthly'
   | 'allTime'
@@ -258,6 +295,7 @@ export function buildStatsFromLedger(
     workingCapital,
     frozenCapital,
     workingShare: shareOf(workingCapital, totalCapital),
+    inOut: capitalInOut(indexed, today),
     daily: dailyPnl(indexed, today),
     monthly: monthlyPnl(indexed, year, month),
     allTime: allTimePnl(indexed, today),

@@ -25,6 +25,9 @@ describe('buildStatsFromLedger', () => {
     expect(stats.capitalSeries.at(-1)?.capital.toFixed()).toBe('11200.00');
     expect(stats.materials).toHaveLength(1);
     expect(stats.materials[0]?.name).toBe('Сбер');
+    expect(stats.inOut.deposits.toFixed()).toBe('10000.00');
+    expect(stats.inOut.withdrawals.toFixed()).toBe('0.00');
+    expect(stats.inOut.depositShare).toEqual(shareOf(rub('10000'), rub('10000')));
   });
 
   it('окно 1W считает periodPnl за неделю, All — allTime, без второго прохода в БД', () => {
@@ -76,6 +79,40 @@ describe('buildStatsFromLedger', () => {
     );
     const stats = buildStatsFromLedger(ledger, d('2024-08-20'));
     expect(stats.materials.map((item) => item.name)).toEqual(['Сбер', 'Нал']);
+  });
+
+  it('ввод/вывод считает доли от оборота; трата и WITHDRAWN входят в вывод', () => {
+    const live = makeCard({ id: 1, createdOn: '2024-08-01', name: 'Сбер' });
+    const gone = makeCard({
+      id: 2,
+      createdOn: '2024-08-01',
+      name: 'Старый',
+      archivedOn: '2024-08-15',
+      archiveReason: 'WITHDRAWN',
+    });
+    const stats = buildStatsFromLedger(
+      makeLedger(
+        [live, gone],
+        [
+          makeEntry(1, '2024-08-01', '10000', '10000'),
+          makeEntry(1, '2024-08-10', '7000', '0', '3000'),
+          makeEntry(2, '2024-08-01', '2000', '2000'),
+        ],
+      ),
+      d('2024-08-20'),
+    );
+    expect(stats.inOut.deposits.toFixed()).toBe('12000.00');
+    expect(stats.inOut.withdrawals.toFixed()).toBe('5000.00');
+    expect(stats.inOut.depositShare).toEqual(shareOf(rub('12000'), rub('17000')));
+    expect(stats.inOut.withdrawalShare).toEqual(shareOf(rub('5000'), rub('17000')));
+  });
+
+  it('ввод/вывод пустой, если записей нет', () => {
+    const stats = buildStatsFromLedger(makeLedger([], []), d('2024-08-20'));
+    expect(stats.inOut.deposits.toFixed()).toBe('0.00');
+    expect(stats.inOut.withdrawals.toFixed()).toBe('0.00');
+    expect(stats.inOut.depositShare).toEqual({ defined: false, reason: 'ZERO_BASE' });
+    expect(stats.inOut.withdrawalShare).toEqual({ defined: false, reason: 'ZERO_BASE' });
   });
 
   it('доля в работе не определена при нулевом капитале', () => {

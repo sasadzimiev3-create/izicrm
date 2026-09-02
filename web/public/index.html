@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Silians — кабинет</title>
-    <link rel="stylesheet" href="/app.css?v=19" />
+    <link rel="stylesheet" href="/app.css?v=20" />
   </head>
   <body>
     <div class="shell">
@@ -144,12 +144,27 @@
             <h2>Структура капитала</h2>
             <div id="allocation" class="alloc-list"></div>
           </article>
-          <article class="card gauge-card">
-            <h2>В работе</h2>
-            <div class="gauge-wrap">
-              <canvas id="gauge" width="220" height="140"></canvas>
-              <p class="gauge-label"><strong id="work-amount">—</strong></p>
-              <p class="muted" id="frozen-line"></p>
+          <article class="card io-card">
+            <h2>Ввод/вывод</h2>
+            <div class="io-wrap">
+              <div
+                class="io-ring is-empty"
+                id="io-ring"
+                role="img"
+                aria-label="Ввод и вывод капитала"
+              ></div>
+              <div class="io-stats">
+                <div class="io-leg in">
+                  <span>Ввод</span>
+                  <strong id="in-pct">—</strong>
+                  <span id="in-amount" class="muted">—</span>
+                </div>
+                <div class="io-leg out">
+                  <span>Вывод</span>
+                  <strong id="out-pct">—</strong>
+                  <span id="out-amount" class="muted">—</span>
+                </div>
+              </div>
             </div>
           </article>
           <article class="card">
@@ -273,6 +288,6 @@
       </form>
     </dialog>
 
-    <script src="/app.js?v=19"></script>
+    <script src="/app.js?v=20"></script>
   </body>
 </html>

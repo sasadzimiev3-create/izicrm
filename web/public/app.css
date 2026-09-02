@@ -960,21 +960,104 @@ h2 {
   transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.gauge-card {
+.io-card {
+  display: flex;
+  flex-direction: column;
   text-align: center;
 }
 
-.gauge-wrap canvas {
-  display: block;
-  width: 220px;
-  height: 140px;
-  margin: 0 auto;
-  max-width: 100%;
+.io-card h2 {
+  text-align: left;
 }
 
-.gauge-label {
-  margin: 0;
-  font-size: 22px;
+.io-wrap {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.io-ring {
+  width: 148px;
+  height: 148px;
+  border-radius: 50%;
+  background: conic-gradient(from -90deg, #2a2724 0 100%);
+  -webkit-mask-image: radial-gradient(farthest-side, transparent 64%, #000 65.5%);
+  mask-image: radial-gradient(farthest-side, transparent 64%, #000 65.5%);
+}
+
+.io-ring:not(.is-empty) {
+  background: conic-gradient(
+    from -90deg,
+    #22c55e 0 var(--in-pct, 0%),
+    #e10f04 var(--in-pct, 0%) 100%
+  );
+}
+
+.io-ring.is-in-only {
+  background: conic-gradient(from -90deg, #22c55e 0 100%);
+}
+
+.io-ring.is-out-only {
+  background: conic-gradient(from -90deg, #e10f04 0 100%);
+}
+
+.io-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 24px;
+  width: 100%;
+}
+
+.io-leg {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+}
+
+.io-leg > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.io-leg > span:first-child::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.io-leg.in > span:first-child::before {
+  background: #22c55e;
+}
+
+.io-leg.out > span:first-child::before {
+  background: #e10f04;
+}
+
+.io-leg strong {
+  font-size: 20px;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.io-leg .muted {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.io-leg.in strong {
+  color: #4ade80;
+}
+
+.io-leg.out strong {
+  color: #f87171;
 }
 
 .flow-list {
