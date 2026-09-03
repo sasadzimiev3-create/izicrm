@@ -498,22 +498,36 @@ function sizeCanvas(canvas) {
 }
 
 function niceTicks(min, max, count) {
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    min = 0;
+    max = 1;
+  }
+  if (min > max) {
+    const swap = min;
+    min = max;
+    max = swap;
+  }
   if (min === max) {
     const pad = Math.max(100, Math.abs(min) * 0.04);
     min -= pad;
     max += pad;
   }
   const span = max - min;
-  const raw = span / count;
+  const raw = span / Math.max(1, count);
   const mag = 10 ** Math.floor(Math.log10(raw));
   const norm = raw / mag;
   const step = (norm >= 5 ? 5 : norm >= 2 ? 2 : 1) * mag;
   const start = Math.floor(min / step) * step;
-  const ticks = [];
-  for (let v = start; v <= max + step / 2; v += step) {
-    ticks.push(v);
+  let end = Math.ceil(max / step) * step;
+  if (end < max) {
+    end += step;
   }
-  return { min: start, max: ticks[ticks.length - 1] ?? max, ticks, step };
+  const ticks = [];
+  const steps = Math.max(1, Math.round((end - start) / step));
+  for (let i = 0; i <= steps; i += 1) {
+    ticks.push(start + i * step);
+  }
+  return { min: start, max: ticks[ticks.length - 1] ?? end, ticks, step };
 }
 
 function layoutPlot(width, height, pad) {
