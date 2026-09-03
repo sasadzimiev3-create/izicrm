@@ -26,6 +26,7 @@ import { reduce } from './fsm/transitions.js';
 import { parseCallbackData, type CallbackAction } from './keyboards/callback-data.js';
 import {
   archiveConfirmKeyboard,
+  backKeyboard,
   cancelKeyboard,
   cardPickerKeyboard,
   dashboardKeyboard,
@@ -581,7 +582,7 @@ async function runEffect(
     case 'SendWebLink': {
       const url = deps.webCabinet?.issueLoginUrl(user.id, user.telegramId) ?? null;
       if (url === null) {
-        await send(sender, COPY.webUnavailable, settingsKeyboard(rev));
+        await send(sender, COPY.webUnavailable, backKeyboard(rev));
         return;
       }
       await send(sender, COPY.webLink, webLinkKeyboard(url, rev));

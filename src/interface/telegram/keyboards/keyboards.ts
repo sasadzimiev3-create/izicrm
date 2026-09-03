@@ -47,7 +47,10 @@ export function mainKeyboard(
   opts: { empty?: boolean; page?: number; hasPrev?: boolean; hasNext?: boolean } = {},
 ): Keyboard {
   if (opts.empty === true) {
-    return [[btn(COPY.topUpMenu, 'topup', null, rev, 'success')]];
+    return [
+      [btn(COPY.topUpMenu, 'topup', null, rev, 'success')],
+      [btn(`💻 ${COPY.webCabinet}`, 'web', null, rev)],
+    ];
   }
   const rows: Keyboard = [
     [btn('🔄 Обновить балансы', 'upd_all', null, rev)],
@@ -67,11 +70,16 @@ export function mainKeyboard(
   if (nav.length > 0) {
     rows.push(nav);
   }
+  rows.push([btn(`💻 ${COPY.webCabinet}`, 'web', null, rev)]);
   return rows;
 }
 
 export function cancelKeyboard(rev: number): Keyboard {
   return [cancelRow(rev)];
+}
+
+export function backKeyboard(rev: number): Keyboard {
+  return [backRow(rev)];
 }
 
 export function updatePromptKeyboard(rev: number): Keyboard {
@@ -97,7 +105,6 @@ export function expenseMenuKeyboard(rev: number): Keyboard {
 
 export function settingsKeyboard(rev: number): Keyboard {
   return [
-    [btn(`💻 ${COPY.webCabinet}`, 'web', null, rev)],
     [btn(`📊 ${COPY.report}`, 'report', null, rev)],
     [btn(`🗑 ${COPY.deleteMaterial}`, 'arch_pick', null, rev)],
     [btn(`📁 ${COPY.archiveMaterials}`, 'arch_list', null, rev)],

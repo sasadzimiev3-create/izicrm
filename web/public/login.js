@@ -1,7 +1,7 @@
 const params = new URLSearchParams(location.search);
 const errorEl = document.getElementById('error');
 if (params.get('error') === 'expired') {
-  errorEl.textContent = 'Ссылка истекла. Запросите новую в Telegram → Настройки → Веб-кабинет.';
+  errorEl.textContent = 'Ссылка истекла. Запросите новую в Telegram → Веб-кабинет.';
   errorEl.classList.remove('hidden');
 }
 

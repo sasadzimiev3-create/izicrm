@@ -161,7 +161,7 @@ describe('FSM reduce — без Telegram', () => {
     expect(skipped.effects).toEqual([{ t: 'ShowHome' }]);
   });
 
-  it('веб-кабинет из настроек не меняет состояние', () => {
+  it('веб-кабинет с главного экрана не меняет состояние', () => {
     const result = reduce(IDLE, { t: 'WebCabinet' });
     expect(result.next).toEqual(IDLE);
     expect(result.effects).toEqual([{ t: 'SendWebLink' }]);
