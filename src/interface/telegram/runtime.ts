@@ -421,10 +421,7 @@ async function classifyCallback(
     case 'web':
       return { t: 'WebCabinet' };
     case 'report':
-      if (!deps.reportLimit.tryAcquire(user.id, deps.clock.now())) {
-        throw new ValidationError(COPY.reportRateLimit);
-      }
-      return { t: 'Report' };
+      return { t: 'Home' };
     case 'topup':
       return { t: 'TopUpMenu' };
     case 'card_add':

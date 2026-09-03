@@ -105,7 +105,6 @@ export function expenseMenuKeyboard(rev: number): Keyboard {
 
 export function settingsKeyboard(rev: number): Keyboard {
   return [
-    [btn(`📊 ${COPY.report}`, 'report', null, rev)],
     [btn(`🗑 ${COPY.deleteMaterial}`, 'arch_pick', null, rev)],
     [btn(`📁 ${COPY.archiveMaterials}`, 'arch_list', null, rev)],
     backRow(rev),

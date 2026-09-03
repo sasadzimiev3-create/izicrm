@@ -321,7 +321,7 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     const settings = (bot.last.lastKeyboard ?? []).flat().map((button) => button.text).join('\n');
     expect(settings).not.toContain('Переименовать');
     expect(settings).not.toContain('стикер');
-    expect(settings).toContain('Отчёт в Excel');
+    expect(settings).not.toContain('Отчёт в Excel');
   });
 
   it('обновление баланса вверх и вниз меняет прибыль, не депозит', async () => {

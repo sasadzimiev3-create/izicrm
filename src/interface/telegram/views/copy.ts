@@ -44,7 +44,6 @@ export const COPY = {
   promptUpdate: (name: string, index: number, total: number, previous: string) =>
     `${name}  (${index} из ${total})\nПредыдущий баланс: ${previous}\n\nВведите текущий баланс:`,
   settingsTitle: 'Настройки',
-  report: 'Отчёт в Excel',
   webCabinet: 'Веб-кабинет',
   webOpen: 'Открыть кабинет',
   webLink: 'Ссылка на кабинет. Действует 12 часов. Данные те же, что в Telegram.',
@@ -66,7 +65,6 @@ export const COPY = {
   pickTarget: 'На какой материал перевести остаток?',
   archivedDone: 'Материал удалён. История сохранена.',
   reportWait: 'Готовлю отчёт…',
-  reportRateLimit: 'Отчёт можно запросить не чаще одного раза в минуту.',
   reportUnavailable: 'Отчёт пока недоступен.',
   workingHeader: 'Материал',
   frozenHeader: 'Заморожено:',

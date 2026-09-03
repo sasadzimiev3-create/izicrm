@@ -28,7 +28,7 @@ describe('главное меню', () => {
 
   it('настройки без переименования и смены стикера', () => {
     const labels = settingsKeyboard(1).flat().map((button) => button.text);
-    expect(labels.some((text) => text.includes('Отчёт'))).toBe(true);
+    expect(labels.some((text) => text.includes('Отчёт'))).toBe(false);
     expect(labels.some((text) => /кабинет/i.test(text))).toBe(false);
     expect(labels.some((text) => text.includes('Удалить'))).toBe(true);
     expect(labels.join('\n')).not.toMatch(/Переименовать|стикер/i);
