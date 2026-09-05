@@ -90,9 +90,9 @@ describe('shutdown', () => {
 });
 
 describe('артефакты развёртывания', () => {
-  it('ожидаемые миграции читаются с диска и включают 0015', () => {
+  it('ожидаемые миграции читаются с диска и включают 0016', () => {
     const names = expectedMigrationNames(join(ROOT, 'migrations'));
-    expect(names.at(-1)).toBe('0015_activity_stats');
+    expect(names.at(-1)).toBe('0016_activity_backfill');
     expect(names[0]).toBe('0001_roles_and_extensions');
   });
 

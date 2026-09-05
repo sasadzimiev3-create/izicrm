@@ -285,6 +285,9 @@ CREATE INDEX audit_log_user_idx ON audit_log (user_id, created_at DESC);
 Календарный день, когда пользователь сделал что-то **после** первого `/start` (кнопка, повторный
 `/start`, вход в кабинет). Первое `/start` в таблицу не пишется. Сумм нет.
 
+Дни до выката `/admin` восстанавливает `0016_activity_backfill` по датам материала, записи
+баланса и аудита — без сумм.
+
 Входы в кабинет по ссылке из бота — отдельно в `web_logins`. Агрегаты для `/admin` считает
 `ops_activity_snapshot` (`SECURITY DEFINER`, без сумм, `EXECUTE` только `izicrm_app`).
 
@@ -533,6 +536,7 @@ migrations/
   0013_maintenance_role.sql
   0014_ops_grants.sql
   0015_activity_stats.sql
+  0016_activity_backfill.sql
 ```
 
 Правила: только вперёд, каждая миграция транзакционна и идемпотентна по проверкам;

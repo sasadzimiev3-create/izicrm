@@ -116,6 +116,7 @@ async function assertExpectedSchema(cluster: StartedCluster): Promise<void> {
       '0013_maintenance_role',
       '0014_ops_grants',
       '0015_activity_stats',
+      '0016_activity_backfill',
     ]);
   } finally {
     await pool.end();

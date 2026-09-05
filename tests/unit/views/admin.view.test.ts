@@ -27,6 +27,7 @@ describe('отчёт /admin', () => {
     expect(text).toContain('После старта: 20');
     expect(text).toContain('Ряд дней (2+ подряд): 5');
     expect(text).toContain('Кабинет: 1 чел.');
+    expect(text).toContain('За всё время');
     expect(text).toContain('Всего /start: 40');
     expect(text).toContain('С материалом: 15');
     expect(text).not.toMatch(/₽|amount|capital/i);

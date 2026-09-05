@@ -16,6 +16,7 @@ export function renderActivityReport(snapshot: ActivitySnapshot): string {
     `Ряд дней (2+ подряд): ${snapshot.streakWeek}`,
     `Кабинет: ${snapshot.webWeek} чел.`,
     '',
+    'За всё время',
     `Всего /start: ${snapshot.registeredAll}`,
     `Заблокировали бота: ${snapshot.blockedAll}`,
     `С материалом: ${snapshot.withMaterialAll}`,
