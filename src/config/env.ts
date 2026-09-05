@@ -8,6 +8,20 @@ function portNumber(value: string, name: string): number {
   return parsed;
 }
 
+/** Telegram user id остаётся строкой: значения выше 2^53 − 1 не влезают в number. */
+export function parseAdminTelegramIds(raw: string | undefined): string[] {
+  if (raw === undefined || raw.trim() === '') {
+    return [];
+  }
+  const ids = raw.split(',').map((part) => part.trim()).filter((part) => part !== '');
+  for (const id of ids) {
+    if (!/^[1-9]\d{0,19}$/u.test(id)) {
+      throw new Error('ADMIN_TELEGRAM_IDS must be comma-separated Telegram user ids');
+    }
+  }
+  return [...new Set(ids)];
+}
+
 const envSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   /** HTTP/SOCKS5 до api.telegram.org, если прямого доступа нет. Пример: http://user:pass@host:8000 */
@@ -23,6 +37,7 @@ const envSchema = z.object({
   WEB_PORT: z.string().default('3000').transform((value) => portNumber(value, 'WEB_PORT')),
   WEB_PUBLIC_URL: z.string().optional(),
   WEB_SESSION_SECRET: z.string().optional(),
+  ADMIN_TELEGRAM_IDS: z.string().optional().transform((value) => parseAdminTelegramIds(value)),
 });
 
 export type Env = z.infer<typeof envSchema>;

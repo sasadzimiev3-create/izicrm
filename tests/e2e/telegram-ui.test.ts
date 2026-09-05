@@ -57,6 +57,23 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     expect(bot.last.allTexts()).not.toMatch(/карт/i);
   });
 
+  it('UI-18: /admin только у allowlist, отчёт за день и неделю', async () => {
+    const stranger = new TelegramProbe(db.pool(), '7010');
+    await insertUser(db.pool(), '7010');
+    await stranger.send('/admin');
+    expect(stranger.last.allTexts()).not.toContain('Впервые /start');
+
+    const adminId = '7011';
+    const admin = new TelegramProbe(db.pool(), adminId, () => new Date(), [adminId]);
+    await insertUser(db.pool(), adminId);
+    await admin.send('/start');
+    await admin.send('/admin');
+    expect(admin.last.lastText).toContain('Впервые /start');
+    expect(admin.last.lastText).toContain('После старта');
+    expect(admin.last.lastText).toContain('7 дней');
+    expect(admin.last.lastText).not.toMatch(/₽/);
+  });
+
   it('UI-06 / UI-07: проход всех в работе; замороженные не в очереди; одна карта — тот же путь', async () => {
     const bot = new TelegramProbe(db.pool(), '602');
     const userId = await insertUser(db.pool(), '602');

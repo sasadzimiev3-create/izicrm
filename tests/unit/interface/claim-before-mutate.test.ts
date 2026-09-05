@@ -103,11 +103,14 @@ function makeDeps(claimed: Set<string>, freezeCalls: number[]): TelegramDeps {
           throw new Error('db down');
         },
       },
+      activity: { recordBotDay: async () => undefined },
     } as unknown as AppServices,
     clock: createClock(() => new Date('2024-08-20T12:00:00+03:00')),
     logger: createSafeLogger(() => undefined),
     report: { build: async () => Buffer.from('') },
     reportLimit: { tryAcquire: () => true },
     webCabinet: null,
+    adminTelegramIds: [],
+    timeZone: 'Europe/Moscow',
   };
 }

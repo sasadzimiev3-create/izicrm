@@ -11,7 +11,7 @@ import { setLocalTelegramId, setLocalUserId } from '../../src/infrastructure/db/
 
 const RLS_VIOLATION = '42501';
 
-const USER_TABLES = ['cards', 'balance_entries', 'dialog_states', 'audit_log', 'processed_updates'] as const;
+const USER_TABLES = ['cards', 'balance_entries', 'dialog_states', 'audit_log', 'processed_updates', 'user_activity_days', 'web_logins'] as const;
 
 describe('изоляция RLS', () => {
   const db = useAppDb();

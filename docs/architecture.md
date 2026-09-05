@@ -94,7 +94,7 @@ src/
     fsm/             states.ts  transitions.ts  machine.ts  guards.ts
     handlers/        start.ts  dashboard.ts  card-create.ts
                      card-archive.ts  card-topup.ts  card-freeze.ts  card-spend.ts
-                     balance-update.ts  report.ts
+                     balance-update.ts  report.ts  admin.ts
     keyboards/       callback-data.ts  keyboards.ts
     views/           dashboard.view.ts  cards.view.ts
   interface/web/
@@ -239,6 +239,12 @@ RLS на этих двух таблицах остаётся включённы�
 
 Регламент запуска — этап 8: systemd-timer или cron вызывает `DELETE` под `izicrm_maintenance`.
 Приложение эти запросы не выполняет.
+
+### ADR-012. Счётчики активности без сумм
+
+`/admin` смотрит всех пользователей. `izicrm_app` под RLS иначе видит только себя.
+Функция `ops_activity_snapshot` — `SECURITY DEFINER`, без денежных колонок, `EXECUTE` только
+у приложения. Кто видит отчёт — allowlist `ADMIN_TELEGRAM_IDS`.
 
 ---
 

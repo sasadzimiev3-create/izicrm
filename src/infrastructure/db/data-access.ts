@@ -1,5 +1,6 @@
 import type pg from 'pg';
 
+import type { ActivityRepository } from '../../application/ports/activity-repository.js';
 import type { AuditLogRepository } from '../../application/ports/audit-log-repository.js';
 import type { BalanceRepository } from '../../application/ports/balance-repository.js';
 import type { CardRepository } from '../../application/ports/card-repository.js';
@@ -11,6 +12,7 @@ import type { UserRepository } from '../../application/ports/user-repository.js'
 
 import { createKysely } from './kysely.js';
 import { PgUnitOfWork } from './unit-of-work.js';
+import { PgActivityRepository } from '../repositories/activity.repository.js';
 import { PgAuditLogRepository } from '../repositories/audit-log.repository.js';
 import { PgBalanceRepository } from '../repositories/balance.repository.js';
 import { PgCardRepository } from '../repositories/card.repository.js';
@@ -28,6 +30,7 @@ export type DataAccess = {
   reports: ReportQueryRepository;
   processed: ProcessedUpdateRepository;
   audit: AuditLogRepository;
+  activity: ActivityRepository;
 };
 
 export function createDataAccess(pool: pg.Pool): DataAccess {
@@ -41,5 +44,6 @@ export function createDataAccess(pool: pg.Pool): DataAccess {
     reports: new PgReportQueryRepository(),
     processed: new PgProcessedUpdateRepository(),
     audit: new PgAuditLogRepository(),
+    activity: new PgActivityRepository(),
   };
 }

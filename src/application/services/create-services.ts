@@ -1,3 +1,4 @@
+import { ActivityService } from './activity.service.js';
 import { ArchiveService } from './archive.service.js';
 import { BalanceUpdateService } from './balance-update.service.js';
 import { CardService } from './card.service.js';
@@ -17,6 +18,7 @@ export type AppServices = {
   freeze: FreezeService;
   spend: SpendService;
   archive: ArchiveService;
+  activity: ActivityService;
 };
 
 export function createAppServices(deps: ServiceDeps): AppServices {
@@ -29,6 +31,7 @@ export function createAppServices(deps: ServiceDeps): AppServices {
     freeze: new FreezeService(deps),
     spend: new SpendService(deps),
     archive: new ArchiveService(deps),
+    activity: new ActivityService(deps),
   };
 }
 

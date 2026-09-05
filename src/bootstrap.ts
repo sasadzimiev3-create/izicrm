@@ -20,6 +20,8 @@ export function createTelegramDeps(
     nowFn?: () => Date;
     logger?: AppLogger;
     webCabinet?: WebCabinet | null;
+    adminTelegramIds?: readonly string[];
+    timeZone?: string;
   } = {},
 ): TelegramDeps {
   return {
@@ -34,5 +36,7 @@ export function createTelegramDeps(
     report: opts.report ?? stubReportService(),
     reportLimit: createReportRateLimiter(),
     webCabinet: opts.webCabinet ?? null,
+    adminTelegramIds: opts.adminTelegramIds ?? [],
+    timeZone: opts.timeZone ?? 'Europe/Moscow',
   };
 }

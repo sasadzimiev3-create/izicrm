@@ -36,6 +36,8 @@ async function main(): Promise<void> {
         return auth.issueLoginUrl(userId, telegramId);
       },
     },
+    adminTelegramIds: env.ADMIN_TELEGRAM_IDS,
+    timeZone: env.TZ,
   });
   const bot = createTelegramBot(token, { proxyUrl: env.TELEGRAM_PROXY_URL });
   bot.use(async (_ctx, next) => {

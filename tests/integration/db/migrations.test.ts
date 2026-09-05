@@ -14,7 +14,9 @@ const TABLES = [
   'dialog_states',
   'pgmigrations',
   'processed_updates',
+  'user_activity_days',
   'users',
+  'web_logins',
 ];
 
 const VIEWS = ['v_capital_flows', 'v_current_balance_entries'];
@@ -113,6 +115,7 @@ async function assertExpectedSchema(cluster: StartedCluster): Promise<void> {
       '0012_grants',
       '0013_maintenance_role',
       '0014_ops_grants',
+      '0015_activity_stats',
     ]);
   } finally {
     await pool.end();

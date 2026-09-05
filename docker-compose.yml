@@ -65,6 +65,7 @@ services:
       WEB_PORT: "3000"
       WEB_PUBLIC_URL: ${WEB_PUBLIC_URL:-}
       WEB_SESSION_SECRET: ${WEB_SESSION_SECRET:-}
+      ADMIN_TELEGRAM_IDS: ${ADMIN_TELEGRAM_IDS:-}
     ports:
       - "3000:3000"
     stop_signal: SIGTERM

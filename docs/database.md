@@ -280,6 +280,14 @@ CREATE INDEX audit_log_user_idx ON audit_log (user_id, created_at DESC);
 Фиксирует создание, переименование и архивирование карт, исправления балансов, генерацию
 отчётов. Позволяет восстановить историю переименований (C-9).
 
+### 3.8. Активность (`user_activity_days`, `web_logins`)
+
+Календарный день, когда пользователь сделал что-то **после** первого `/start` (кнопка, повторный
+`/start`, вход в кабинет). Первое `/start` в таблицу не пишется. Сумм нет.
+
+Входы в кабинет по ссылке из бота — отдельно в `web_logins`. Агрегаты для `/admin` считает
+`ops_activity_snapshot` (`SECURITY DEFINER`, без сумм, `EXECUTE` только `izicrm_app`).
+
 ---
 
 ## 4. Представления
@@ -524,6 +532,7 @@ migrations/
   0012_grants.sql
   0013_maintenance_role.sql
   0014_ops_grants.sql
+  0015_activity_stats.sql
 ```
 
 Правила: только вперёд, каждая миграция транзакционна и идемпотентна по проверкам;
@@ -554,3 +563,4 @@ migrations/
 | DB-15 | Все миграции применяются на чистой базе и дают ожидаемую схему |
 | DB-16 | `izicrm_maintenance` не имеет `SELECT`/`DELETE` на `cards` и `balance_entries`; `DELETE` живой строки `dialog_states` (`expires_at > now()`) удаляет 0 строк |
 | DB-17 | `capital_in < 0` ⟹ ошибка CHECK; заморозка архивной карты ⟹ ошибка CHECK; `v_capital_flows` включает пополнение и не включает заморозку |
+| DB-18 | `ops_activity_snapshot` не возвращает суммы; `user_activity_days` / `web_logins` без контекста — ноль строк |

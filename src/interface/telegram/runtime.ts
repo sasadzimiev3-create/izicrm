@@ -47,6 +47,7 @@ import { renderArchivedList, renderFrozenCard } from './views/cards.view.js';
 import { paginateText, renderDashboard } from './views/dashboard.view.js';
 import type { CardRow } from '../../application/ports/card-repository.js';
 import { isStartCommand } from './handlers/start.js';
+import { isAdminCommand, tryHandleAdmin } from './handlers/admin.js';
 
 const NOT_FOUND = COPY.notFound;
 
@@ -135,10 +136,16 @@ function ackCallback(
   });
 }
 
-async function loadUser(deps: TelegramDeps, telegramId: string): Promise<UserRecord> {
-  return deps.uow.withTelegramIdentity(telegramId, (tx: DbTx) =>
-    deps.users.findOrCreateByTelegramId(telegramId, tx),
-  );
+async function loadUser(
+  deps: TelegramDeps,
+  telegramId: string,
+): Promise<{ user: UserRecord; created: boolean }> {
+  return deps.uow.withTelegramIdentity(telegramId, async (tx: DbTx) => {
+    const existing = await deps.users.getUserByTelegramId(telegramId, tx);
+    const user =
+      existing ?? (await deps.users.findOrCreateByTelegramId(telegramId, tx));
+    return { user, created: existing === null };
+  });
 }
 
 async function claimUpdate(deps: TelegramDeps, userId: UserId, updateId: number): Promise<boolean> {
@@ -173,7 +180,7 @@ export async function handleIncoming(
   sender: TelegramSender,
 ): Promise<void> {
   const correlationId = `upd-${String(update.updateId)}`;
-  const user = await loadUser(deps, update.telegramId);
+  const { user, created } = await loadUser(deps, update.telegramId);
   const claimed = await claimUpdate(deps, user.id, update.updateId);
   if (!claimed) {
     deps.logger.info({ userId: user.id, correlationId, updateId: update.updateId }, 'duplicate update');
@@ -182,6 +189,14 @@ export async function handleIncoming(
 
   const ack = ackCallback(deps, user.id, correlationId, update, sender);
   try {
+    if (await tryHandleAdmin(deps, user, update, sender)) {
+      return;
+    }
+    const firstStart =
+      created && update.kind === 'message' && isStartCommand(update.text);
+    if (!firstStart) {
+      await deps.services.activity.recordBotDay(user.id, deps.clock.businessDate(deps.timeZone));
+    }
     await handleClaimed(deps, user, update, sender, correlationId);
   } finally {
     await ack;

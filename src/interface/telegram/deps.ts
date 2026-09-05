@@ -30,4 +30,6 @@ export type TelegramDeps = {
   report: ReportService;
   reportLimit: ReportRateLimiter;
   webCabinet: WebCabinet | null;
+  adminTelegramIds: readonly string[];
+  timeZone: string;
 };

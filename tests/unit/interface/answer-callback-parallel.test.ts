@@ -63,12 +63,17 @@ function makeDeps(): TelegramDeps {
       clearUserDialogState: async () => undefined,
     },
     cards: {} as TelegramDeps['cards'],
-    services: { card: { getUserCard: async () => null } } as unknown as AppServices,
+    services: {
+      card: { getUserCard: async () => null },
+      activity: { recordBotDay: async () => undefined },
+    } as unknown as AppServices,
     clock: createClock(() => new Date('2024-08-20T12:00:00+03:00')),
     logger: createSafeLogger(() => undefined),
     report: { build: async () => Buffer.from('') },
     reportLimit: { tryAcquire: () => true },
     webCabinet: null,
+    adminTelegramIds: [],
+    timeZone: 'Europe/Moscow',
   };
 }
 

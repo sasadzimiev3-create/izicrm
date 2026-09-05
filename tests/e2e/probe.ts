@@ -32,6 +32,7 @@ export class TelegramProbe {
     pool: pg.Pool,
     readonly telegramId: string,
     nowFn: () => Date = () => new Date('2024-08-20T12:00:00+03:00'),
+    adminTelegramIds: readonly string[] = [],
   ) {
     this.updateId = nextUpdateId;
     nextUpdateId += 10_000;
@@ -39,6 +40,7 @@ export class TelegramProbe {
     this.deps = createTelegramDeps(access, {
       nowFn,
       logger: createSafeLogger((line) => this.logs.push(line)),
+      adminTelegramIds,
     });
   }
 

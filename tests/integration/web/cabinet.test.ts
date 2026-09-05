@@ -10,7 +10,7 @@ import { createDataAccess } from '../../../src/infrastructure/db/data-access.js'
 import { createSafeLogger } from '../../../src/interface/telegram/log.js';
 import { createWebAuth } from '../../../src/interface/web/auth.js';
 import { defaultPublicDir, startWebServer } from '../../../src/interface/web/server.js';
-import { insertUser, useAppDb } from '../harness.js';
+import { insertUser, useAppDb, withUser } from '../harness.js';
 import { unwrap } from '../services/app.js';
 
 const D = parseBusinessDate;
@@ -50,6 +50,14 @@ describe('веб-кабинет и изоляция', () => {
     try {
       const base = `http://127.0.0.1:${String(web.port)}`;
       const ownerCookie = await login(base, auth, ownerId, ownerTg);
+      const logins = await withUser(pool, String(ownerId), async (client) => {
+        const result = await client.query<{ n: string }>(
+          'SELECT count(*)::text AS n FROM web_logins WHERE user_id = $1',
+          [String(ownerId)],
+        );
+        return result.rows[0]?.n;
+      });
+      expect(logins).toBe('1');
       const create = await fetch(`${base}/api/cards`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', cookie: ownerCookie },

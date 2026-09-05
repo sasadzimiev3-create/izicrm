@@ -187,6 +187,17 @@ async function handleAuthRedirect(deps: WebDeps, url: URL, res: http.ServerRespo
     return;
   }
   const session = deps.auth.issueSessionToken(principal.userId, principal.telegramId);
+  try {
+    await deps.services.activity.recordWebLogin(
+      principal.userId,
+      deps.clock.businessDate('Europe/Moscow'),
+    );
+  } catch (error) {
+    deps.logger.error(
+      { userId: principal.userId, correlationId: 'web-login', err: String(error) },
+      'web login record failed',
+    );
+  }
   res.statusCode = 302;
   res.setHeader('set-cookie', sessionCookie(session, deps.auth.cookieSecure));
   res.setHeader('location', '/');

@@ -121,6 +121,17 @@ export type AuditLogTable = {
   created_at: Generated<Timestamptz>;
 };
 
+export type UserActivityDaysTable = {
+  user_id: BigIntString;
+  activity_on: IsoDate;
+};
+
+export type WebLoginsTable = {
+  id: Generated<BigIntString>;
+  user_id: BigIntString;
+  logged_in_at: Generated<Timestamptz>;
+};
+
 export type CurrentBalanceEntriesView = {
   id: BigIntString;
   user_id: BigIntString;
@@ -148,6 +159,8 @@ export type Database = {
   dialog_states: DialogStatesTable;
   processed_updates: ProcessedUpdatesTable;
   audit_log: AuditLogTable;
+  user_activity_days: UserActivityDaysTable;
+  web_logins: WebLoginsTable;
   v_current_balance_entries: CurrentBalanceEntriesView;
   v_capital_flows: CapitalFlowsView;
 };
