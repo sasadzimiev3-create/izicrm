@@ -1,4 +1,6 @@
 export type ActivitySnapshot = {
+  usedToday: string;
+  usedWeek: string;
   newStartToday: string;
   newStartWeek: string;
   usedAfterStartToday: string;

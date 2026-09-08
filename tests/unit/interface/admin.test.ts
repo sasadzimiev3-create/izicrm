@@ -43,6 +43,8 @@ const EMPTY_DASHBOARD: Dashboard = {
 };
 
 const SNAPSHOT: ActivitySnapshot = {
+  usedToday: '1',
+  usedWeek: '2',
   newStartToday: '1',
   newStartWeek: '2',
   usedAfterStartToday: '0',
@@ -84,9 +86,25 @@ describe('доступ /admin', () => {
       { kind: 'message', updateId: 2, telegramId: ADMIN.telegramId, text: '/admin' },
       sender,
     );
+    expect(sender.lastText).toContain('Использовали: 1 чел.');
     expect(sender.lastText).toContain('Впервые /start: 1');
     expect(sender.lastText).toContain('После старта: 0');
     expect(sender.lastText).toContain('7 дней');
+  });
+
+  it('/admin считается действием за сегодня', async () => {
+    const recorded: string[] = [];
+    const deps = makeDeps(ADMIN.telegramId, [ADMIN.telegramId]);
+    deps.services.activity.recordBotDay = async () => {
+      recorded.push('day');
+    };
+    const sender = new MemorySender();
+    await handleIncoming(
+      deps,
+      { kind: 'message', updateId: 3, telegramId: ADMIN.telegramId, text: '/admin' },
+      sender,
+    );
+    expect(recorded).toEqual(['day']);
   });
 });
 

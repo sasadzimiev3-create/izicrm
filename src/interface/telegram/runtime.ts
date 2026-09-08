@@ -219,22 +219,12 @@ export async function handleIncoming(
     const ack = ackCallback(deps, user.id, correlationId, update, sender);
     try {
       if (await tryHandleAdmin(deps, user, update, sender)) {
+        await recordBotActivityDay(deps, user, update, created, correlationId);
         await completeUpdate(deps, user.id, update.updateId);
         return;
       }
       await handleClaimed(deps, user, update, sender, correlationId);
-      const firstStart =
-        created && update.kind === 'message' && isStartCommand(update.text);
-      if (!firstStart) {
-        try {
-          await deps.services.activity.recordBotDay(user.id, deps.clock.businessDate(deps.timeZone));
-        } catch (error: unknown) {
-          deps.logger.warn(
-            { userId: user.id, correlationId, updateId: update.updateId },
-            `activity day failed: ${String(error)}`,
-          );
-        }
-      }
+      await recordBotActivityDay(deps, user, update, created, correlationId);
       await completeUpdate(deps, user.id, update.updateId);
     } catch (error: unknown) {
       deps.logger.error(
@@ -246,6 +236,27 @@ export async function handleIncoming(
     }
   } finally {
     inFlightUpdates.delete(flightKey);
+  }
+}
+
+async function recordBotActivityDay(
+  deps: TelegramDeps,
+  user: UserRecord,
+  update: IncomingUpdate,
+  created: boolean,
+  correlationId: string,
+): Promise<void> {
+  const firstStart = created && update.kind === 'message' && isStartCommand(update.text);
+  if (firstStart) {
+    return;
+  }
+  try {
+    await deps.services.activity.recordBotDay(user.id, deps.clock.businessDate(deps.timeZone));
+  } catch (error: unknown) {
+    deps.logger.warn(
+      { userId: user.id, correlationId, updateId: update.updateId },
+      `activity day failed: ${String(error)}`,
+    );
   }
 }
 

@@ -8,6 +8,10 @@ export class ActivityService {
   constructor(private readonly deps: ServiceDeps) {}
 
   async recordBotDay(userId: UserId, day: BusinessDate): Promise<void> {
+    await this.recordActionDay(userId, day);
+  }
+
+  async recordActionDay(userId: UserId, day: BusinessDate): Promise<void> {
     await this.deps.uow.withUser(userId, (tx) => this.deps.activity.touchUserDay(userId, day, tx));
   }
 

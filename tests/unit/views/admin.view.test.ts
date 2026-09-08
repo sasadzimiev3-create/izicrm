@@ -4,6 +4,8 @@ import type { ActivitySnapshot } from '../../../src/application/dto/activity-sta
 import { renderActivityReport } from '../../../src/interface/telegram/views/admin.view.js';
 
 const SNAPSHOT: ActivitySnapshot = {
+  usedToday: '9',
+  usedWeek: '22',
   newStartToday: '3',
   newStartWeek: '12',
   usedAfterStartToday: '8',
@@ -20,9 +22,11 @@ const SNAPSHOT: ActivitySnapshot = {
 describe('отчёт /admin', () => {
   it('день и неделя без сумм', () => {
     const text = renderActivityReport(SNAPSHOT);
+    expect(text).toContain('Использовали: 9 чел.');
     expect(text).toContain('Впервые /start: 3');
     expect(text).toContain('После старта: 8');
     expect(text).toContain('Ряд дней (сегодня и вчера): 2');
+    expect(text).toContain('Использовали: 22 чел.');
     expect(text).toContain('Впервые /start: 12');
     expect(text).toContain('После старта: 20');
     expect(text).toContain('Ряд дней (2+ подряд): 5');

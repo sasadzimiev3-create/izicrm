@@ -93,9 +93,9 @@ describe('shutdown', () => {
 });
 
 describe('артефакты развёртывания', () => {
-  it('ожидаемые миграции читаются с диска и включают 0018', () => {
+  it('ожидаемые миграции читаются с диска и включают 0019', () => {
     const names = expectedMigrationNames(join(ROOT, 'migrations'));
-    expect(names.at(-1)).toBe('0018_claim_retry_and_supersede');
+    expect(names.at(-1)).toBe('0019_activity_used_today');
     expect(names[0]).toBe('0001_roles_and_extensions');
   });
 

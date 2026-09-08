@@ -286,13 +286,15 @@ CREATE INDEX audit_log_user_idx ON audit_log (user_id, created_at DESC);
 ### 3.8. Активность (`user_activity_days`, `web_logins`)
 
 Календарный день, когда пользователь сделал что-то **после** первого `/start` (кнопка, повторный
-`/start`, вход в кабинет). Первое `/start` в таблицу не пишется. Сумм нет.
+`/start`, любой запрос в кабинете). Первое `/start` в таблицу не пишется: в счётчике
+«Использовали» оно учитывается через `users.created_at`. Сумм нет.
 
 Дни до выката `/admin` восстанавливает `0016_activity_backfill` по датам материала, записи
 баланса и аудита — без сумм.
 
-Входы в кабинет по ссылке из бота — отдельно в `web_logins`. Агрегаты для `/admin` считает
-`ops_activity_snapshot` (`SECURITY DEFINER`, без сумм, `EXECUTE` только `izicrm_app`).
+Входы в кабинет по ссылке из бота и через Telegram Login Widget — отдельно в `web_logins`.
+Агрегаты для `/admin` считает `ops_activity_snapshot` (`SECURITY DEFINER`, без сумм, `EXECUTE`
+только `izicrm_app`): «Использовали» — объединение дней активности и новых `/start`.
 
 ### 3.9. Напоминания (`reminders`, `user_feedback`)
 
@@ -549,6 +551,7 @@ migrations/
   0016_activity_backfill.sql
   0017_reminders.sql
   0018_claim_retry_and_supersede.sql
+  0019_activity_used_today.sql
 ```
 
 Правила: только вперёд, каждая миграция транзакционна и идемпотентна по проверкам;

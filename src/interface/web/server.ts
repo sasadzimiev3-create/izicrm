@@ -8,7 +8,7 @@ import { z } from 'zod';
 
 import type { AppServices } from '../../application/services/create-services.js';
 import { USDT_RUB_PAGE, type QuoteSource } from '../../application/ports/quote-source.js';
-import type { UserRepository } from '../../application/ports/user-repository.js';
+import type { UserRepository, UserRecord } from '../../application/ports/user-repository.js';
 import type { UnitOfWork } from '../../application/ports/unit-of-work.js';
 import type { Clock } from '../../config/clock.js';
 import { cardId } from '../../domain/cards/card.js';
@@ -194,6 +194,23 @@ function sessionOf(deps: WebDeps, req: http.IncomingMessage): AuthPrincipal | nu
   return deps.auth.verify(token, 'session');
 }
 
+async function touchWebActivityDay(
+  deps: WebDeps,
+  user: { id: UserRecord['id']; tz: string },
+): Promise<void> {
+  try {
+    await deps.services.activity.recordActionDay(
+      user.id,
+      deps.clock.businessDate(user.tz),
+    );
+  } catch (error) {
+    deps.logger.warn(
+      { userId: user.id, correlationId: 'web-activity' },
+      `web activity day failed: ${String(error)}`,
+    );
+  }
+}
+
 async function handleAuthRedirect(deps: WebDeps, url: URL, res: http.ServerResponse): Promise<void> {
   const token = url.searchParams.get('token');
   if (token === null || token === '') {
@@ -246,6 +263,17 @@ async function handleTelegramLogin(
     deps.users.findOrCreateByTelegramId(telegramId, tx),
   );
   const session = deps.auth.issueSessionToken(user.id, user.telegramId);
+  try {
+    await deps.services.activity.recordWebLogin(
+      user.id,
+      deps.clock.businessDate(user.tz),
+    );
+  } catch (error) {
+    deps.logger.error(
+      { userId: user.id, correlationId: 'web-telegram-login', err: String(error) },
+      'web login record failed',
+    );
+  }
   res.statusCode = 204;
   res.setHeader('set-cookie', sessionCookie(session, deps.auth.cookieSecure));
   res.end();
@@ -267,6 +295,7 @@ async function handleApi(
     json(res, 401, { error: 'Нужен вход' });
     return;
   }
+  await touchWebActivityDay(deps, user);
   const today = deps.clock.businessDate(user.tz);
 
   if (method === 'GET' && pathname === '/api/me') {

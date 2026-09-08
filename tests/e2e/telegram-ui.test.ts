@@ -68,6 +68,7 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-19)', () => {
     await insertUser(db.pool(), adminId);
     await admin.send('/start');
     await admin.send('/admin');
+    expect(admin.last.lastText).toContain('Использовали');
     expect(admin.last.lastText).toContain('Впервые /start');
     expect(admin.last.lastText).toContain('После старта');
     expect(admin.last.lastText).toContain('7 дней');

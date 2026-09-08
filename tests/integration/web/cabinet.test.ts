@@ -281,6 +281,60 @@ describe('веб-кабинет и изоляция', () => {
       await empty.close();
     }
   });
+
+  it('любой запрос в кабинете пишет день активности без нового входа', async () => {
+    const pool = db.pool();
+    const access = createDataAccess(pool);
+    const services = createAppServices(access);
+    const auth = createWebAuth({
+      secret: 'cabinet-secret',
+      publicUrl: 'http://127.0.0.1',
+      nowFn: () => new Date('2024-08-20T12:00:00+03:00'),
+    });
+    const ownerTg = '88021';
+    const ownerId = parseUserId(await insertUser(pool, ownerTg));
+    const web = await startWebServer(
+      {
+        services,
+        uow: access.uow,
+        users: access.users,
+        clock: createClock(() => new Date('2024-08-20T12:00:00+03:00')),
+        logger: createSafeLogger(() => undefined),
+        auth,
+        publicDir: defaultPublicDir(),
+        botUsername: null,
+        quotes: null,
+      },
+      { host: '127.0.0.1', port: 0 },
+    );
+
+    try {
+      const base = `http://127.0.0.1:${String(web.port)}`;
+      const cookie = `izicrm_session=${auth.issueSessionToken(ownerId, ownerTg)}`;
+      const overview = await fetch(`${base}/api/overview`, { headers: { cookie } });
+      expect(overview.status).toBe(200);
+
+      const days = await withUser(pool, String(ownerId), async (client) => {
+        const result = await client.query<{ activity_on: string }>(
+          'SELECT activity_on::text FROM user_activity_days WHERE user_id = $1',
+          [String(ownerId)],
+        );
+        return result.rows.map((row) => row.activity_on);
+      });
+      expect(days).toEqual(['2024-08-20']);
+
+      const logins = await withUser(pool, String(ownerId), async (client) => {
+        const result = await client.query<{ n: string }>(
+          'SELECT count(*)::text AS n FROM web_logins WHERE user_id = $1',
+          [String(ownerId)],
+        );
+        return result.rows[0]?.n;
+      });
+      expect(logins).toBe('0');
+    } finally {
+      await web.close();
+    }
+  });
 });
 
 async function login(
