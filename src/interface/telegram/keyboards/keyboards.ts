@@ -132,7 +132,6 @@ export function remindersKeyboard(settings: ReminderSettings, rev: number): Keyb
   return [
     ...dayRows,
     [btn('−1 ч', 'rem_h', -1, rev), btn(clock, 'remind', null, rev), btn('+1 ч', 'rem_h', 1, rev)],
-    [btn('−15 мин', 'rem_m', -15, rev), btn('+15 мин', 'rem_m', 15, rev)],
     [toggle],
     [btn(`◀️ ${COPY.back}`, 'settings', null, rev)],
   ];

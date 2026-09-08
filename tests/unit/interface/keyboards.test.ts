@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { dashboardKeyboard, mainKeyboard, settingsKeyboard } from '../../../src/interface/telegram/keyboards/keyboards.js';
+import { dashboardKeyboard, mainKeyboard, remindersKeyboard, settingsKeyboard } from '../../../src/interface/telegram/keyboards/keyboards.js';
 import { cardId } from '../../../src/domain/cards/card.js';
 import { Money } from '../../../src/domain/money/money.js';
 
@@ -33,5 +33,15 @@ describe('главное меню', () => {
     expect(labels.some((text) => text.includes('Напоминания'))).toBe(true);
     expect(labels.some((text) => text.includes('Удалить'))).toBe(true);
     expect(labels.join('\n')).not.toMatch(/Переименовать|стикер/i);
+  });
+
+  it('напоминания без шага 15 минут', () => {
+    const labels = remindersKeyboard({ enabled: false, notifyMinute: 21 * 60, days: 0 }, 1)
+      .flat()
+      .map((button) => button.text)
+      .join('\n');
+    expect(labels).toContain('−1 ч');
+    expect(labels).toContain('+1 ч');
+    expect(labels).not.toMatch(/15 мин/);
   });
 });

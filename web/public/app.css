@@ -432,19 +432,29 @@ body {
   min-width: 42px;
   padding: 8px 0;
   border-radius: 999px;
-  border: 1px solid var(--line);
-  background: #0c0b0a;
-  color: var(--muted);
+  border: 1px solid rgba(225, 15, 4, 0.28);
+  background: rgba(225, 15, 4, 0.12);
+  color: #f0a8a4;
   font: inherit;
   font-size: 12px;
   font-weight: 650;
   cursor: pointer;
 }
 
+.remind-day:hover {
+  background: rgba(225, 15, 4, 0.2);
+  border-color: rgba(225, 15, 4, 0.42);
+}
+
 .remind-day.is-on {
-  color: #111;
-  background: var(--cream);
-  border-color: var(--cream);
+  color: #b6f0d0;
+  background: rgba(26, 147, 101, 0.22);
+  border-color: rgba(134, 239, 172, 0.38);
+}
+
+.remind-day.is-on:hover {
+  background: rgba(26, 147, 101, 0.32);
+  border-color: rgba(134, 239, 172, 0.5);
 }
 
 .remind-ok {

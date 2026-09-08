@@ -239,7 +239,7 @@ type DialogState =
 | `ArchiveTarget` | `cb:target:<id>` | `Idle` | Транзакция: обнулить источник, прибавить остаток получателю, архивировать `TRANSFERRED`, потока нет |
 | `Idle` | `cb:settings` | `Idle` | Показать раздел настроек (C-19, C-28) |
 | `Idle` | `cb:remind` | `Idle` | Экран напоминаний: дни, время, вкл/выкл |
-| `Idle` | `cb:rem_d` / `cb:rem_h` / `cb:rem_m` / `cb:rem_en` | `Idle` | Переключить день, сдвинуть время, включить |
+| `Idle` | `cb:rem_d` / `cb:rem_h` / `cb:rem_en` | `Idle` | Переключить день, сдвинуть час, включить |
 | `Idle` | `cb:report` | `ReportBuilding` | Rate limit; сформировать и отправить файл |
 | `ReportBuilding` | завершение | `Idle` | Отправить документ |
 | любое | `cb:cancel` | `Idle` | Сбросить состояние, показать главный экран |
