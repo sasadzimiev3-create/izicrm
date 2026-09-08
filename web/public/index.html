@@ -229,7 +229,7 @@
                 <span>помогите нам стать лучше</span>
               </button>
             </div>
-            <form id="remind-form" class="form remind-form hidden">
+            <form id="remind-form" class="form remind-form hidden" autocomplete="off" novalidate>
               <button type="button" class="ghost op-back" id="remind-back">Назад</button>
               <p class="op-step-title">Напоминания</p>
               <p class="muted small">Одно время на все выбранные дни. Придёт в Telegram.</p>
@@ -244,7 +244,7 @@
               </label>
               <p id="remind-error" class="error hidden"></p>
               <p id="remind-ok" class="remind-ok hidden">Сохранено</p>
-              <button type="submit" class="primary">Сохранить</button>
+              <button type="button" class="primary" id="remind-save">Сохранить</button>
             </form>
             <form id="op-form" class="form hidden">
               <input id="op-kind" type="hidden" value="" />
@@ -343,6 +343,6 @@
       </form>
     </dialog>
 
-    <script src="/app.js?v=24"></script>
+    <script src="/app.js?v=25"></script>
   </body>
 </html>

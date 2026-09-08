@@ -1208,13 +1208,45 @@ $('op-menu').addEventListener('click', (event) => {
 });
 
 const REMIND_DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-const remindState = { days: [] };
+const remindState = { days: [], enabled: false, time: '21:00' };
 
 function paintRemindDays() {
   $('remind-days').innerHTML = REMIND_DAYS.map(
     (label, bit) =>
       `<button type="button" class="remind-day${remindState.days.includes(bit) ? ' is-on' : ''}" data-day="${bit}">${label}</button>`,
   ).join('');
+}
+
+function applyRemindSettings(data) {
+  remindState.enabled = Boolean(data && data.enabled);
+  remindState.time = (data && data.time) || '21:00';
+  remindState.days = Array.isArray(data && data.days) ? data.days.map(Number) : [];
+  paintRemindControls();
+}
+
+function paintRemindControls() {
+  $('remind-enabled').checked = remindState.enabled;
+  $('remind-time').value = remindState.time;
+  paintRemindDays();
+}
+
+function restoreRemindControls() {
+  $('remind-enabled').checked = remindState.enabled;
+  $('remind-time').value = remindState.time;
+}
+
+let remindTimeGuardUntil = 0;
+
+function rememberRemindTime() {
+  const value = $('remind-time').value;
+  if (value) remindState.time = value;
+  restoreRemindControls();
+}
+
+function armRemindTimeGuard() {
+  remindTimeGuardUntil = Date.now() + 800;
+  rememberRemindTime();
+  requestAnimationFrame(restoreRemindControls);
 }
 
 async function openReminders() {
@@ -1225,17 +1257,18 @@ async function openReminders() {
   $('op-form').classList.add('hidden');
   $('remind-form').classList.remove('hidden');
   const data = await api('/api/reminders');
-  $('remind-enabled').checked = Boolean(data.enabled);
-  $('remind-time').value = data.time || '21:00';
-  remindState.days = Array.isArray(data.days) ? data.days.map(Number) : [];
-  paintRemindDays();
+  applyRemindSettings(data);
 }
 
 $('open-reminders').addEventListener('click', () => {
   openReminders().catch((error) => showError('remind-error', error.message));
 });
 
-$('remind-back').addEventListener('click', () => showOpMenu());
+$('remind-back').addEventListener('click', (event) => {
+  event.preventDefault();
+  restoreRemindControls();
+  showOpMenu();
+});
 
 $('remind-days').addEventListener('click', (event) => {
   const btn = event.target.closest('[data-day]');
@@ -1249,25 +1282,64 @@ $('remind-days').addEventListener('click', (event) => {
   paintRemindDays();
 });
 
-$('remind-form').addEventListener('submit', async (event) => {
-  event.preventDefault();
+$('remind-enabled').addEventListener('click', async (event) => {
+  if (!event.isTrusted || Date.now() < remindTimeGuardUntil) {
+    restoreRemindControls();
+    return;
+  }
+  remindState.enabled = $('remind-enabled').checked;
+  if (remindState.enabled) return;
   showError('remind-error', '');
   $('remind-ok').classList.add('hidden');
   try {
     const saved = await api('/api/reminders', {
       method: 'PUT',
       body: JSON.stringify({
-        enabled: $('remind-enabled').checked,
-        time: $('remind-time').value,
+        enabled: false,
+        time: remindState.time,
         days: remindState.days,
       }),
     });
-    $('remind-enabled').checked = Boolean(saved.enabled);
-    $('remind-time').value = saved.time || '21:00';
-    remindState.days = Array.isArray(saved.days) ? saved.days.map(Number) : [];
-    paintRemindDays();
+    applyRemindSettings(saved);
+  } catch (error) {
+    remindState.enabled = true;
+    restoreRemindControls();
+    showError('remind-error', error.message);
+  }
+});
+
+['input', 'change', 'blur', 'cancel'].forEach((name) => {
+  $('remind-time').addEventListener(name, armRemindTimeGuard);
+});
+
+$('remind-form').addEventListener('reset', (event) => {
+  event.preventDefault();
+  restoreRemindControls();
+});
+
+$('remind-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  restoreRemindControls();
+});
+
+$('remind-save').addEventListener('click', async (event) => {
+  event.preventDefault();
+  rememberRemindTime();
+  showError('remind-error', '');
+  $('remind-ok').classList.add('hidden');
+  try {
+    const saved = await api('/api/reminders', {
+      method: 'PUT',
+      body: JSON.stringify({
+        enabled: true,
+        time: remindState.time,
+        days: remindState.days,
+      }),
+    });
+    applyRemindSettings(saved);
     $('remind-ok').classList.remove('hidden');
   } catch (error) {
+    restoreRemindControls();
     showError('remind-error', error.message);
   }
 });
