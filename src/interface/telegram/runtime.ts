@@ -53,6 +53,9 @@ import { tryHandleAdmin } from './handlers/admin.js';
 
 const NOT_FOUND = COPY.notFound;
 
+/** Один процесс: повтор того же update_id, пока первый ещё выполняется, не заходит в handler. */
+const inFlightUpdates = new Set<string>();
+
 function sameState(left: DialogState, right: DialogState): boolean {
   return JSON.stringify(serializeDialogState(left)) === JSON.stringify(serializeDialogState(right));
 }
@@ -151,7 +154,11 @@ async function loadUser(
 }
 
 async function claimUpdate(deps: TelegramDeps, userId: UserId, updateId: number): Promise<boolean> {
-  return deps.uow.withUser(userId, (tx: DbTx) => deps.processed.claim(userId, String(updateId), tx));
+  return deps.uow.withUser(userId, (tx: DbTx) => deps.processed.claim(userId, String(updateId), tx, true));
+}
+
+async function completeUpdate(deps: TelegramDeps, userId: UserId, updateId: number): Promise<void> {
+  await deps.uow.withUser(userId, (tx: DbTx) => deps.processed.complete(userId, String(updateId), tx));
 }
 
 async function readDialog(deps: TelegramDeps, userId: UserId, now: Date) {
@@ -162,6 +169,19 @@ async function readDialog(deps: TelegramDeps, userId: UserId, now: Date) {
 async function writeDialog(deps: TelegramDeps, userId: UserId, state: DialogState, now: Date) {
   return deps.uow.withUser(userId, (tx: DbTx) =>
     deps.dialogs.upsertUserDialogState(userId, toUpsert(state, dialogExpiresAt(now)), tx),
+  );
+}
+
+async function restoreConsumedRev(
+  deps: TelegramDeps,
+  userId: UserId,
+  restore: { from: number; to: number } | null,
+): Promise<void> {
+  if (restore === null) {
+    return;
+  }
+  await deps.uow.withUser(userId, (tx: DbTx) =>
+    deps.dialogs.restoreUserDialogRev(userId, restore.from, restore.to, tx),
   );
 }
 
@@ -183,25 +203,49 @@ export async function handleIncoming(
 ): Promise<void> {
   const correlationId = `upd-${String(update.updateId)}`;
   const { user, created } = await loadUser(deps, update.telegramId);
-  const claimed = await claimUpdate(deps, user.id, update.updateId);
-  if (!claimed) {
-    deps.logger.info({ userId: user.id, correlationId, updateId: update.updateId }, 'duplicate update');
+  const flightKey = `${String(user.id)}:${String(update.updateId)}`;
+  if (inFlightUpdates.has(flightKey)) {
+    deps.logger.info({ userId: user.id, correlationId, updateId: update.updateId }, 'in-flight update');
     return;
   }
-
-  const ack = ackCallback(deps, user.id, correlationId, update, sender);
+  inFlightUpdates.add(flightKey);
   try {
-    if (await tryHandleAdmin(deps, user, update, sender)) {
+    const claimed = await claimUpdate(deps, user.id, update.updateId);
+    if (!claimed) {
+      deps.logger.info({ userId: user.id, correlationId, updateId: update.updateId }, 'duplicate update');
       return;
     }
-    const firstStart =
-      created && update.kind === 'message' && isStartCommand(update.text);
-    if (!firstStart) {
-      await deps.services.activity.recordBotDay(user.id, deps.clock.businessDate(deps.timeZone));
+
+    const ack = ackCallback(deps, user.id, correlationId, update, sender);
+    try {
+      if (await tryHandleAdmin(deps, user, update, sender)) {
+        await completeUpdate(deps, user.id, update.updateId);
+        return;
+      }
+      await handleClaimed(deps, user, update, sender, correlationId);
+      const firstStart =
+        created && update.kind === 'message' && isStartCommand(update.text);
+      if (!firstStart) {
+        try {
+          await deps.services.activity.recordBotDay(user.id, deps.clock.businessDate(deps.timeZone));
+        } catch (error: unknown) {
+          deps.logger.warn(
+            { userId: user.id, correlationId, updateId: update.updateId },
+            `activity day failed: ${String(error)}`,
+          );
+        }
+      }
+      await completeUpdate(deps, user.id, update.updateId);
+    } catch (error: unknown) {
+      deps.logger.error(
+        { userId: user.id, correlationId, updateId: update.updateId },
+        `update not completed: ${String(error)}`,
+      );
+    } finally {
+      await ack;
     }
-    await handleClaimed(deps, user, update, sender, correlationId);
   } finally {
-    await ack;
+    inFlightUpdates.delete(flightKey);
   }
 }
 
@@ -225,15 +269,41 @@ async function handleClaimed(
   }
 
   let event: DialogEvent;
+  let restoreRev: { from: number; to: number } | null = null;
   try {
-    event = await classify(deps, user, state, stateRev, update);
+    if (update.kind === 'callback') {
+      const parsed = parseCallbackData(update.data);
+      if (!parsed.ok) {
+        event = { t: 'Home' };
+      } else {
+        const consumed = await deps.uow.withUser(user.id, (tx: DbTx) =>
+          deps.dialogs.consumeUserDialogRev(user.id, parsed.rev, tx),
+        );
+        if (consumed === 'stale') {
+          event = { t: 'Stale' };
+        } else {
+          if (typeof consumed === 'number') {
+            restoreRev = { from: consumed, to: parsed.rev };
+            stateRev = consumed;
+          } else {
+            assertFreshRev(stateRev, parsed.rev);
+          }
+          event = await classifyCallback(deps, user, state, update.data);
+        }
+      }
+    } else {
+      event = await classifyText(deps, user, state, update.text);
+    }
   } catch (error) {
     if (error instanceof StaleCallbackError) {
       event = { t: 'Stale' };
+    } else if (error instanceof NotFoundError) {
+      event = { t: 'NotFound' };
     } else if (error instanceof ValidationError) {
       await send(sender, error.message, cancelKeyboard(stateRev));
       return;
     } else {
+      await restoreConsumedRev(deps, user.id, restoreRev);
       throw error;
     }
   }
@@ -258,9 +328,23 @@ async function handleClaimed(
   }
 
   try {
-    await runEffects(deps, user, sender, reduced.next, mutations, stateRev, correlationId);
+    await runEffects(
+      deps,
+      user,
+      sender,
+      reduced.next,
+      mutations,
+      stateRev,
+      correlationId,
+      String(update.updateId),
+    );
   } catch (error) {
-    await handleEffectError(deps, user, sender, state, stateRev, error, correlationId);
+    try {
+      await handleEffectError(deps, user, sender, state, stateRev, error, correlationId);
+    } catch (inner) {
+      await restoreConsumedRev(deps, user.id, restoreRev);
+      throw inner;
+    }
     return;
   }
 
@@ -318,19 +402,7 @@ async function handleEffectError(
   }
   deps.logger.error({ userId: user.id, correlationId, err: String(error) }, 'effect failed');
   await send(sender, COPY.genericError);
-}
-
-async function classify(
-  deps: TelegramDeps,
-  user: UserRecord,
-  state: DialogState,
-  stateRev: number,
-  update: IncomingUpdate,
-): Promise<DialogEvent> {
-  if (update.kind === 'message') {
-    return classifyText(deps, user, state, update.text);
-  }
-  return classifyCallback(deps, user, state, stateRev, update.data);
+  throw error;
 }
 
 async function classifyText(
@@ -393,9 +465,17 @@ async function classifyAmount(
   if (state.t === 'BalanceUpdateAmount') {
     const id = state.queue[state.index];
     if (id !== undefined) {
-      const locf = await deps.services.balanceUpdate.previousBalance(user.id, id, state.businessDate);
-      name = locf.card.name;
-      previous = locf.amount.toFixed();
+      const peek = await deps.services.balanceUpdate.inspectQueueCard(
+        user.id,
+        id,
+        state.businessDate,
+        state.queue.length,
+      );
+      if (peek.kind === 'skip') {
+        return { t: 'Skip', name: peek.name, previous: peek.previous };
+      }
+      name = peek.card.name;
+      previous = peek.amount.toFixed();
     }
   }
   if (state.t === 'TopUpAmount' || state.t === 'SpendAmount') {
@@ -415,7 +495,6 @@ async function classifyCallback(
   deps: TelegramDeps,
   user: UserRecord,
   state: DialogState,
-  stateRev: number,
   data: string,
 ): Promise<DialogEvent> {
   const parsed = parseCallbackData(data);
@@ -425,7 +504,6 @@ async function classifyCallback(
     }
     return { t: 'Home' };
   }
-  assertFreshRev(stateRev, parsed.rev);
 
   const today = todayOf(deps, user);
   const action = parsed.action;
@@ -499,8 +577,16 @@ async function classifyCallback(
         if (current === undefined) {
           return { t: 'Home' };
         }
-        const locf = await deps.services.balanceUpdate.previousBalance(user.id, current, state.businessDate);
-        return { t: 'Skip', name: locf.card.name, previous: locf.amount.toFixed() };
+        const peek = await deps.services.balanceUpdate.inspectQueueCard(
+          user.id,
+          current,
+          state.businessDate,
+          state.queue.length,
+        );
+        if (peek.kind === 'skip') {
+          return { t: 'Skip', name: peek.name, previous: peek.previous };
+        }
+        return { t: 'Skip', name: peek.card.name, previous: peek.amount.toFixed() };
       }
       return { t: 'Home' };
     case 'arch_pick':
@@ -606,9 +692,10 @@ async function runEffects(
   effects: Effect[],
   rev: number,
   correlationId: string,
+  mutationKey?: string,
 ): Promise<void> {
   for (const effect of effects) {
-    await runEffect(deps, user, sender, state, effect, rev, correlationId);
+    await runEffect(deps, user, sender, state, effect, rev, correlationId, mutationKey);
   }
 }
 
@@ -620,6 +707,7 @@ async function runEffect(
   effect: Effect,
   rev: number,
   correlationId: string,
+  mutationKey?: string,
 ): Promise<void> {
   const today = todayOf(deps, user);
   switch (effect.t) {
@@ -687,6 +775,7 @@ async function runEffect(
         name: effect.name,
         amount: Money.from(effect.amount),
         createdOn: today,
+        ...(mutationKey === undefined ? {} : { idempotencyKey: `m:${mutationKey}` }),
       });
       return;
     }
@@ -713,6 +802,7 @@ async function runEffect(
         cardId: effect.cardId,
         newAmount: Money.from(effect.amount),
         businessDate: effect.businessDate,
+        ...(mutationKey === undefined ? {} : { idempotencyKey: `m:${mutationKey}` }),
       });
       if (applied.applied) {
         const card = await ownedCard(deps, user.id, effect.cardId);
@@ -732,6 +822,7 @@ async function runEffect(
         cardId: effect.cardId,
         newAmount: Money.from(effect.amount),
         businessDate: effect.businessDate,
+        ...(mutationKey === undefined ? {} : { idempotencyKey: `m:${mutationKey}` }),
       });
       if (applied.applied) {
         const card = await ownedCard(deps, user.id, effect.cardId);
@@ -747,13 +838,20 @@ async function runEffect(
       return;
     }
     case 'ApplyFreeze': {
-      await deps.services.freeze.freeze(user.id, { cardId: effect.cardId, frozenOn: today });
+      await deps.services.freeze.freeze(user.id, {
+        cardId: effect.cardId,
+        frozenOn: today,
+        ...(mutationKey === undefined ? {} : { idempotencyKey: `m:${mutationKey}` }),
+      });
       const card = await ownedCard(deps, user.id, effect.cardId);
       await send(sender, COPY.freezeDone(card?.name ?? ''));
       return;
     }
     case 'ApplyUnfreeze': {
-      await deps.services.freeze.unfreeze(user.id, { cardId: effect.cardId });
+      await deps.services.freeze.unfreeze(user.id, {
+        cardId: effect.cardId,
+        ...(mutationKey === undefined ? {} : { idempotencyKey: `m:${mutationKey}` }),
+      });
       const card = await ownedCard(deps, user.id, effect.cardId);
       await send(sender, COPY.unfreezeDone(card?.name ?? ''));
       return;
@@ -780,6 +878,8 @@ async function runEffect(
         cardId: effect.cardId,
         amount: Money.from(effect.amount),
         businessDate: effect.businessDate,
+        workingOnly: effect.workingOnly,
+        ...(mutationKey === undefined ? {} : { idempotencyKey: `m:${mutationKey}` }),
       });
       return;
     case 'PromptArchiveConfirm': {
@@ -803,6 +903,7 @@ async function runEffect(
         archivedOn: today,
         reason: effect.reason,
         ...(effect.targetCardId === undefined ? {} : { targetCardId: effect.targetCardId }),
+        ...(mutationKey === undefined ? {} : { idempotencyKey: `m:${mutationKey}` }),
       });
       await send(sender, COPY.archivedDone);
       return;
@@ -986,19 +1087,43 @@ async function sendUpdatePrompt(
   state: DialogState,
   rev: number,
 ): Promise<void> {
-  if (state.t !== 'BalanceUpdateAmount') {
-    return;
+  let current = state;
+  let currentRev = rev;
+  while (current.t === 'BalanceUpdateAmount') {
+    const id = current.queue[current.index];
+    if (id === undefined) {
+      return;
+    }
+    const peek = await deps.services.balanceUpdate.inspectQueueCard(
+      user.id,
+      id,
+      current.businessDate,
+      current.queue.length,
+    );
+    if (peek.kind === 'ready') {
+      await send(
+        sender,
+        COPY.promptUpdate(
+          peek.card.name,
+          current.index + 1,
+          current.queue.length,
+          formatMoney(peek.amount),
+        ),
+        updatePromptKeyboard(currentRev),
+      );
+      return;
+    }
+    const reduced = reduce(current, { t: 'Skip', name: peek.name, previous: peek.previous });
+    if (!sameState(current, reduced.next)) {
+      const saved = await writeDialog(deps, user.id, reduced.next, deps.clock.now());
+      currentRev = saved.stateRev;
+    }
+    current = reduced.next;
+    if (current.t === 'Idle') {
+      await sendHome(deps, user, sender, currentRev);
+      return;
+    }
   }
-  const id = state.queue[state.index];
-  if (id === undefined) {
-    return;
-  }
-  const locf = await deps.services.balanceUpdate.previousBalance(user.id, id, state.businessDate);
-  await send(
-    sender,
-    COPY.promptUpdate(locf.card.name, state.index + 1, state.queue.length, formatMoney(locf.amount)),
-    updatePromptKeyboard(rev),
-  );
 }
 
 async function runReport(

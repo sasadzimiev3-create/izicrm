@@ -112,9 +112,12 @@ function makeDeps(telegramId: string, allowlist: readonly string[]): TelegramDep
         claimed.add(key);
         return true;
       },
+      complete: async () => undefined,
     },
     dialogs: {
       getUserDialogState: async () => null,
+      consumeUserDialogRev: async () => 'missing',
+      restoreUserDialogRev: async () => undefined,
       upsertUserDialogState: async (_userId, input) => ({
         userId: user.id,
         state: input.state,

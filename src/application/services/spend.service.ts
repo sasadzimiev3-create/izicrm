@@ -7,7 +7,7 @@ import { Money } from '../../domain/money/money.js';
 import type { Applied, SpendCommand } from '../dto/commands.js';
 import type { CardRow } from '../ports/card-repository.js';
 
-import { locfForCard, once, requireActiveCard, type ServiceDeps } from './support.js';
+import { locfForCard, lockUserCards, once, requireActiveCard, type ServiceDeps } from './support.js';
 
 /**
  * Трата без удаления: `Y <` текущего, `capital_out += Δ` (C-30, T-12).
@@ -26,6 +26,7 @@ export class SpendService {
   async spend(userId: UserId, command: SpendCommand): Promise<Applied<{ delta: Money }>> {
     return this.deps.uow.withUser(userId, (tx) =>
       once(this.deps.processed, userId, command.idempotencyKey, tx, async () => {
+        await lockUserCards(this.deps.cards, userId, [command.cardId], tx);
         await requireActiveCard(
           this.deps.cards,
           userId,

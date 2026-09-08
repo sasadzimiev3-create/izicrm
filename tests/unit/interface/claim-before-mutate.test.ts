@@ -32,12 +32,23 @@ const CARD: CardRow = {
   icon: null,
 };
 
-describe('claim до мутации', () => {
-  it('после сбоя freeze повтор того же update_id не вызывает сервис', async () => {
-    const claimed = new Set<string>();
+describe('pending-claim апдейта', () => {
+  it('после сбоя freeze повтор того же update_id снова вызывает сервис', async () => {
+    const completed = new Set<string>();
     const freezeCalls: number[] = [];
-    const deps = makeDeps(claimed, freezeCalls);
-    const data = encodeCallback('freeze', CARD.id, 0);
+    let dialogRev = 1;
+    const deps = makeDeps(completed, freezeCalls, () => dialogRev, (from, to) => {
+      if (dialogRev === from) {
+        dialogRev = to;
+      }
+    }, (expected) => {
+      if (expected !== dialogRev) {
+        return 'stale';
+      }
+      dialogRev += 1;
+      return dialogRev;
+    });
+    const data = encodeCallback('freeze', CARD.id, 1);
 
     const first = new MemorySender();
     await handleIncoming(
@@ -47,7 +58,8 @@ describe('claim до мутации', () => {
     );
     expect(freezeCalls).toEqual([1]);
     expect(first.allTexts()).toContain(COPY.genericError);
-    expect(claimed.has('42')).toBe(true);
+    expect(completed.has('42')).toBe(false);
+    expect(dialogRev).toBe(1);
 
     const second = new MemorySender();
     await handleIncoming(
@@ -55,12 +67,18 @@ describe('claim до мутации', () => {
       { kind: 'callback', updateId: 42, telegramId: USER.telegramId, data },
       second,
     );
-    expect(freezeCalls).toEqual([1]);
-    expect(second.messages).toHaveLength(0);
+    expect(freezeCalls).toEqual([1, 1]);
   });
 });
 
-function makeDeps(claimed: Set<string>, freezeCalls: number[]): TelegramDeps {
+function makeDeps(
+  completed: Set<string>,
+  freezeCalls: number[],
+  currentRev: () => number,
+  restoreRev: (from: number, to: number) => void,
+  consumeRev: (expected: number) => 'missing' | 'stale' | number,
+): TelegramDeps {
+  const pending = new Set<string>();
   return {
     uow: {
       withUser: async (_userId, work) => work(TX),
@@ -73,16 +91,38 @@ function makeDeps(claimed: Set<string>, freezeCalls: number[]): TelegramDeps {
       markUserBlocked: async () => undefined,
     },
     processed: {
-      claim: async (_userId, key) => {
-        if (claimed.has(key)) {
+      claim: async (_userId, key, _tx, isPending) => {
+        if (completed.has(key)) {
           return false;
         }
-        claimed.add(key);
+        if (isPending === true) {
+          pending.add(key);
+          return true;
+        }
+        if (pending.has(key) || completed.has(key)) {
+          return false;
+        }
+        pending.add(key);
         return true;
+      },
+      complete: async (_userId, key) => {
+        pending.delete(key);
+        completed.add(key);
       },
     },
     dialogs: {
-      getUserDialogState: async () => null,
+      getUserDialogState: async () => ({
+        userId: USER.id,
+        state: 'Idle',
+        payload: {},
+        businessDate: null,
+        stateRev: currentRev(),
+        expiresAt: new Date('2024-08-20T12:30:00+03:00'),
+      }),
+      consumeUserDialogRev: async (_userId, expected) => consumeRev(expected),
+      restoreUserDialogRev: async (_userId, from, to) => {
+        restoreRev(from, to);
+      },
       upsertUserDialogState: async (_userId, input) => ({
         userId: USER.id,
         state: input.state,

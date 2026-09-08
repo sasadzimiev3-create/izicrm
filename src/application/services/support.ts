@@ -25,6 +25,17 @@ export type ServiceDeps = {
 
 export const NOT_FOUND = 'Материал не найден';
 
+export async function lockUserCards(
+  cards: CardRepository,
+  userId: UserId,
+  cardIds: readonly CardId[],
+  tx: DbTx,
+): Promise<void> {
+  const unique = [...new Set(cardIds)];
+  unique.sort((left, right) => left - right);
+  await cards.lockUserCards(userId, unique, tx);
+}
+
 export async function once<T>(
   processed: ProcessedUpdateRepository,
   userId: UserId,

@@ -28,6 +28,10 @@ describe('DB-19 напоминания', () => {
     const second = await access.uow.withOps((tx) => access.reminders.claimDueReminders(now, tx));
     expect(second).toEqual([]);
 
+    await access.uow.withOps((tx) => access.reminders.releaseDueReminder('21001', tx));
+    const afterRelease = await access.uow.withOps((tx) => access.reminders.claimDueReminders(now, tx));
+    expect(afterRelease).toEqual(['21001']);
+
     const seen = await withUser(pool, bob, async (client) => {
       const result = await client.query(`SELECT user_id FROM reminders`);
       return result.rows;

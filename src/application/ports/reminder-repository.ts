@@ -8,4 +8,5 @@ export interface ReminderRepository {
   upsertUserReminder(userId: UserId, settings: ReminderSettings, tx: DbTx): Promise<void>;
   insertUserFeedback(userId: UserId, message: string, tx: DbTx): Promise<void>;
   claimDueReminders(now: Date, tx: DbTx): Promise<string[]>;
+  releaseDueReminder(telegramId: string, tx: DbTx): Promise<void>;
 }

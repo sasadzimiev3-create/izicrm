@@ -19,12 +19,31 @@ export type UpsertDialogStateInput = {
   expiresAt: Date;
 };
 
-export interface DialogStateRepository {
+export type DialogStateRepository = {
   getUserDialogState(userId: UserId, tx: DbTx): Promise<DialogStateRecord | null>;
+  /**
+   * Сравнивает и увеличивает `state_rev`. Второй запрос с тем же rev получает `stale`.
+   * Нет строки диалога — `missing` (первый визит, проверять нечего).
+   */
+  consumeUserDialogRev(
+    userId: UserId,
+    expectedRev: number,
+    tx: DbTx,
+  ): Promise<'missing' | 'stale' | number>;
+  /**
+   * Возвращает ревизию после сбоя операции, чтобы повтор того же callback снова прошёл CAS.
+   * Срабатывает только если текущая ревизия всё ещё `fromRev` (мы её только что заняли).
+   */
+  restoreUserDialogRev(
+    userId: UserId,
+    fromRev: number,
+    toRev: number,
+    tx: DbTx,
+  ): Promise<void>;
   upsertUserDialogState(
     userId: UserId,
     input: UpsertDialogStateInput,
     tx: DbTx,
   ): Promise<DialogStateRecord>;
   clearUserDialogState(userId: UserId, tx: DbTx): Promise<void>;
-}
+};

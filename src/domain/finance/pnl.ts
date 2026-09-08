@@ -3,7 +3,7 @@ import { Money } from '../money/money.js';
 import {
   firstEntryDate,
   indexLedger,
-  lastEntryDate,
+  lastActivityDate,
   previousUpdateDate,
   type Ledger,
 } from './balance.js';
@@ -95,18 +95,25 @@ export function dailyPnl(ledger: Ledger, date: BusinessDate): DailyPnl {
 }
 
 /**
- * Месячный P&L: `S` — 1-е число, `E = min(конец месяца, последняя запись)`.
- * Если последняя запись раньше месяца, `E` — конец месяца (LOCF, потоков нет).
+ * Месячный P&L: `S` — 1-е число, `E = min(конец месяца, последняя активность)`.
+ * Активность — запись баланса или архивирование. Иначе `LOST` без последующего
+ * обновления не попадает в месяц. Если последняя активность раньше месяца,
+ * `E` — конец месяца (LOCF, потоков нет). `asOf` отсекает события после «сегодня».
  * Сумма — `periodPnl` от закрытия предыдущего месяца (C-4).
  * Если `Cap(S − 1) ≤ 0` (учёт начат в этом месяце), процент — к депозитам месяца (C-15).
  *
  * @see docs/financial-model.md §5.3
  */
-export function monthlyPnl(ledger: Ledger, year: number, month: number): PeriodPnl {
+export function monthlyPnl(
+  ledger: Ledger,
+  year: number,
+  month: number,
+  asOf?: BusinessDate,
+): PeriodPnl {
   const indexed = indexLedger(ledger);
   const start = monthStart(year, month);
   const end = monthEnd(year, month);
-  const last = lastEntryDate(indexed);
+  const last = lastActivityDate(indexed, asOf);
   const to = last === undefined ? end : clipMonthEnd(start, end, last);
   const pnl = periodPnl(indexed, start, to);
   if (pnl.percent.defined) {

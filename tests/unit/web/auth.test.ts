@@ -3,7 +3,7 @@ import { createHmac, createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import { userId } from '../../../src/domain/cards/card.js';
-import { createWebAuth } from '../../../src/interface/web/auth.js';
+import { createWebAuth, sessionCookie } from '../../../src/interface/web/auth.js';
 
 describe('web auth tokens', () => {
   const auth = createWebAuth({
@@ -36,6 +36,18 @@ describe('web auth tokens', () => {
       nowFn: () => new Date('2024-08-21T00:01:00Z'),
     });
     expect(expired.verify(token, 'login')).toBeNull();
+  });
+
+  it('https URL включает Secure у cookie', () => {
+    const httpsAuth = createWebAuth({
+      secret: 'test-secret',
+      publicUrl: 'https://example.invalid',
+      nowFn: () => new Date('2024-08-20T12:00:00Z'),
+    });
+    expect(httpsAuth.cookieSecure).toBe(true);
+    expect(sessionCookie('abc', httpsAuth.cookieSecure)).toContain('Secure');
+    expect(auth.cookieSecure).toBe(false);
+    expect(sessionCookie('abc', auth.cookieSecure)).not.toContain('Secure');
   });
 
   it('проверяет подпись Telegram Login Widget', () => {

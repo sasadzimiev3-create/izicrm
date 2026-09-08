@@ -1,6 +1,7 @@
 import type { CardId, UserId } from '../../domain/cards/card.js';
 import type { LocfBalance } from '../ports/balance-repository.js';
-import { isWorking } from '../../domain/finance/card-scope.js';
+import { isFrozen, isInScope, isWorking } from '../../domain/finance/card-scope.js';
+import { NotFoundError } from '../../domain/errors.js';
 import type { BusinessDate } from '../../domain/finance/period.js';
 import { Money } from '../../domain/money/money.js';
 import type { BalanceEntrySource } from '../ports/balance-repository.js';
@@ -10,8 +11,11 @@ import type { CardRow } from '../ports/card-repository.js';
 
 import {
   locfForCard,
+  lockUserCards,
+  NOT_FOUND,
   once,
   requireActiveCard,
+  requireUserCard,
   type ServiceDeps,
 } from './support.js';
 
@@ -31,11 +35,16 @@ export function flowsForDailyUpdate(
   return { capitalIn: locf.capitalIn, capitalOut: locf.capitalOut, source: 'CORRECTION' };
 }
 
+export type UpdateQueueCard =
+  | { kind: 'ready'; card: CardRow; amount: Money }
+  | { kind: 'skip'; name: string; previous: string };
+
 /**
  * Обновление баланса одной карты. Замороженные можно обновить по одной (C-27).
- * Очередь «все» — только незамороженные.
+ * Очередь «все» — только незамороженные; карта, ушедшая из работы во время прохода, пропускается.
  *
  * @see docs/architecture.md §5.2
+ * @see docs/telegram-flows.md §6
  */
 export class BalanceUpdateService {
   constructor(private readonly deps: ServiceDeps) {}
@@ -47,16 +56,44 @@ export class BalanceUpdateService {
     });
   }
 
+  /**
+   * Состояние карты в очереди обновления. Для прохода «все» (`queueLength > 1`)
+   * замороженная или архивная карта — `skip`. Для одной карты архив — ошибка.
+   */
+  async inspectQueueCard(
+    userId: UserId,
+    cardId: CardId,
+    date: BusinessDate,
+    queueLength: number,
+  ): Promise<UpdateQueueCard> {
+    return this.deps.uow.withUser(userId, async (tx) => {
+      const card = await requireUserCard(this.deps.cards, userId, cardId, tx);
+      const skippable = queueLength > 1;
+      if (!isInScope(card, date) || (skippable && isFrozen(card))) {
+        if (!skippable) {
+          throw new NotFoundError(NOT_FOUND);
+        }
+        return { kind: 'skip', name: card.name, previous: '0.00' };
+      }
+      const locf = await locfForCard(this.deps.balances, userId, cardId, date, tx);
+      return { kind: 'ready', card, amount: locf.amount };
+    });
+  }
+
   async update(userId: UserId, command: UpdateBalanceCommand): Promise<Applied<void>> {
     return this.deps.uow.withUser(userId, (tx) =>
       once(this.deps.processed, userId, command.idempotencyKey, tx, async () => {
-        await requireActiveCard(
+        await lockUserCards(this.deps.cards, userId, [command.cardId], tx);
+        const card = await requireActiveCard(
           this.deps.cards,
           userId,
           command.cardId,
           command.businessDate,
           tx,
         );
+        if (command.workingOnly === true && isFrozen(card)) {
+          return;
+        }
         const locf = await locfForCard(
           this.deps.balances,
           userId,

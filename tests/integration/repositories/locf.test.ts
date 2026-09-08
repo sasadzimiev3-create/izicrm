@@ -4,7 +4,7 @@ import { parseUserId } from '../../../src/infrastructure/db/ids.js';
 import { createDataAccess } from '../../../src/infrastructure/db/data-access.js';
 import { parseBusinessDate } from '../../../src/domain/finance/period.js';
 import { Money } from '../../../src/domain/money/money.js';
-import { insertUser, useAppDb } from '../harness.js';
+import { insertUser, useAppDb, withUser } from '../harness.js';
 
 const D = parseBusinessDate;
 
@@ -76,6 +76,21 @@ describe('DB-13 LOCF и запросы database.md §6', () => {
       const onTenth = await balances.locfSnapshot(userId, D('2024-08-10'), tx);
       expect(onTenth[0]?.amount.toFixed()).toBe('150.00');
     });
+
+    const versions = await withUser(db.pool(), String(userId), async (client) => {
+      const result = await client.query<{ id: string; superseded_by: string | null }>(
+        `SELECT id::text, superseded_by::text
+           FROM balance_entries
+          WHERE user_id = $1 AND card_id = $2 AND effective_date = '2024-08-01'
+          ORDER BY id`,
+        [String(userId), String(card.id)],
+      );
+      return result.rows;
+    });
+    expect(versions).toHaveLength(2);
+    expect(versions[0]?.superseded_by).toBe(versions[1]?.id);
+    expect(versions[0]?.id).not.toBe(versions[0]?.superseded_by);
+    expect(versions[1]?.superseded_by).toBeNull();
   });
 
   it('карта вне scope (ещё не создана / уже архивирована) не попадает в снимок', async () => {

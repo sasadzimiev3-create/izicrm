@@ -63,4 +63,10 @@ export class PgReminderRepository implements ReminderRepository {
     `.execute(kyselyTx(tx));
     return result.rows.map((row) => row.telegram_id);
   }
+
+  async releaseDueReminder(telegramId: string, tx: DbTx): Promise<void> {
+    await sql`
+      SELECT ops_release_due_reminder(${telegramId})
+    `.execute(kyselyTx(tx));
+  }
 }

@@ -202,9 +202,14 @@ RLS-политики не пропускают ни одной строки (fai
 
 ### ADR-009. Идемпотентность обработки апдейтов
 
-Таблица `processed_updates(update_id PRIMARY KEY)`. Повторная доставка апдейта Telegram или
-двойное нажатие кнопки не создают вторую запись баланса. Плюс защита от устаревших кнопок
-через ревизию состояния в `callback_data` (`docs/telegram-flows.md` §5).
+Таблица `processed_updates(update_id TEXT PRIMARY KEY, completed)`. Ключ доставки Telegram
+занимается как pending (`completed = false`); после успешного handler — `complete`. Сбой
+до `complete` оставляет ключ незавершённым, повторная доставка снова входит в handler.
+Финансовые операции внутри handler имеют свои ключи (`m:{update_id}`, `web:{uuid}`) через
+`once()` в той же транзакции, что и запись: откат отменяет и claim.
+
+Плюс защита от устаревших кнопок: `consumeUserDialogRev` — `UPDATE … WHERE state_rev = expected`
+(второй запрос с тем же rev получает `stale`). HTTP-кабинет передаёт `Idempotency-Key`.
 
 ### ADR-010. Чистые view-функции для Telegram-текстов
 
@@ -249,7 +254,10 @@ RLS на этих двух таблицах остаётся включённы�
 ### ADR-013. Напоминания без обхода RLS в приложении
 
 Очередь пушей смотрит всех пользователей. Функция `ops_claim_due_reminders` —
-`SECURITY DEFINER`, без сумм, помечает `last_sent_on` атомарно.
+`SECURITY DEFINER`, без сумм, помечает `last_sent_on` атомарно. Владелец функции —
+суперпользователь миграций: иначе `FORCE ROW LEVEL SECURITY` без `app.current_user_id`
+в `withOps` вернул бы пустую очередь. Сбой Telegram снимает метку через
+`ops_release_due_reminder`.
 
 ---
 
@@ -282,9 +290,9 @@ RLS на этих двух таблицах остаётся включённы�
 [🔄 Обновить баланс] → [Все в обороте]
   → FSM: Idle → BalanceUpdateAwaitingAmount { queue, index: 0, businessDate: today }
   → queue = незамороженные карты в scope; замороженные не входят (C-27)
-  → на каждый ввод:
-      парсинг суммы (Zod + domain/money/parse)   — ошибка не продвигает состояние
-      guard: карта всё ещё принадлежит пользователю и активна
+  → на каждый шаг очереди:
+      карта ушла из работы (заморозка/архив) → Skip, следующая
+      иначе парсинг суммы — ошибка не продвигает состояние
       uow.withUser: upsert записи (вытеснение предыдущей за ту же дату)
       index++ → следующая карта либо итог
   → итог: DashboardService.getDashboard → FSM: Idle

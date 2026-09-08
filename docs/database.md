@@ -21,7 +21,7 @@ PostgreSQL 17. Одна физическая база, логическая из
 ## 2. Роли
 
 ```sql
--- владелец схемы, выполняет миграции; RLS к нему не применяется в обычном режиме
+-- владелец схемы после bootstrap; сами SQL-миграции гоняет суперпользователь
 CREATE ROLE izicrm_migrator LOGIN PASSWORD :'migrator_password';
 
 -- рабочая роль приложения: только DML, БЕЗ BYPASSRLS, НЕ суперпользователь
@@ -252,14 +252,17 @@ CREATE INDEX dialog_states_expiry_idx ON dialog_states (expires_at);
 
 ```sql
 CREATE TABLE processed_updates (
-  update_id    BIGINT      PRIMARY KEY,
+  update_id    TEXT        PRIMARY KEY,
   user_id      BIGINT      REFERENCES users (id) ON DELETE CASCADE,
-  processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  processed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  completed    BOOLEAN     NOT NULL DEFAULT TRUE
 );
 CREATE INDEX processed_updates_gc_idx ON processed_updates (processed_at);
 ```
 
-Идемпотентность (ADR-009). Записи старше 7 суток удаляет `izicrm_maintenance` по расписанию
+Идемпотентность (ADR-009). `update_id` — текст: числовой Telegram `update_id` и ключи сервисов
+(`m:…`, `web:…`). Pending-строка (`completed = false`) позволяет повторить апдейт после сбоя;
+после успеха — `complete`. Записи старше 7 суток удаляет `izicrm_maintenance` по расписанию
 (ADR-011), не `izicrm_app`.
 
 ### 3.7. `audit_log`
@@ -294,7 +297,8 @@ CREATE INDEX audit_log_user_idx ON audit_log (user_id, created_at DESC);
 ### 3.9. Напоминания (`reminders`, `user_feedback`)
 
 Одно время на неделю (`notify_minute`) и битовая маска дней (пн=бит 0). Пуш забирает
-`ops_claim_due_reminders` (`SECURITY DEFINER`, без сумм). Обратная связь из кабинета —
+`ops_claim_due_reminders` (`SECURITY DEFINER`, без сумм). Если `sendMessage` не прошёл,
+`ops_release_due_reminder` снимает `last_sent_on`, чтобы повторить в тот же день. Обратная связь из кабинета —
 `user_feedback`, без денежных полей.
 
 ---
@@ -494,22 +498,22 @@ WHERE user_id = $1 AND flow_date BETWEEN $2 AND $3;
 
 ### 6.4. Вытеснение записи (исправление)
 
-Внутри одной транзакции:
+Три оператора в одной транзакции. Сначала вытеснение с заглушкой `superseded_by = id`
+(чтобы частичный unique освободил слот), затем вставка, затем замена заглушки на id
+новой строки. Два `UPDATE` одной строки в одном CTE PostgreSQL не применяет.
 
 ```sql
-WITH inserted AS (
-  INSERT INTO balance_entries (user_id, card_id, effective_date, amount, source)
-  VALUES ($1, $2, $3, $4, $5) RETURNING id
-)
 UPDATE balance_entries be
-SET superseded_at = now(), superseded_by = (SELECT id FROM inserted)
-WHERE be.card_id = $2 AND be.effective_date = $3
-  AND be.superseded_at IS NULL AND be.id <> (SELECT id FROM inserted);
-```
+SET superseded_at = now(), superseded_by = be.id
+WHERE be.user_id = $1 AND be.card_id = $2 AND be.effective_date = $3
+  AND be.superseded_at IS NULL;
 
-Порядок важен: сначала вставка, затем вытеснение прежней. Частичный unique-индекс проверяется
-в конце оператора, поэтому кратковременное наличие двух актуальных записей внутри одного
-`UPDATE` допустимо, а конкурирующая транзакция получит ошибку уникальности и будет повторена.
+INSERT INTO balance_entries (...) VALUES (...) RETURNING id;
+
+UPDATE balance_entries
+SET superseded_by = $new_id
+WHERE id = $old_id AND superseded_by = id;
+```
 
 ---
 
@@ -544,12 +548,14 @@ migrations/
   0015_activity_stats.sql
   0016_activity_backfill.sql
   0017_reminders.sql
+  0018_claim_retry_and_supersede.sql
 ```
 
 Правила: только вперёд, каждая миграция транзакционна и идемпотентна по проверкам;
-выполняется ролью `izicrm_migrator`; на старте приложение проверяет, что все миграции
-применены, иначе не поднимается. `down`-миграции пишутся, но на боевой базе не применяются
-к финансовым таблицам (A-4).
+выполняется суперпользователем (`DATABASE_ADMIN_URL`, `bootstrap-migrate.ts`), чтобы
+`SECURITY DEFINER` функции ops принадлежали роли с обходом RLS. На старте приложение
+проверяет, что все миграции применены, иначе не поднимается. `down`-миграции пишутся, но
+на боевой базе не применяются к финансовым таблицам (A-4).
 
 ---
 

@@ -16,6 +16,8 @@ export type UpdateBalanceCommand = {
   cardId: CardId;
   amount: Money;
   businessDate: BusinessDate;
+  /** Проход «все»: замороженную карту не обновлять. */
+  workingOnly?: boolean;
   idempotencyKey?: string;
 };
 

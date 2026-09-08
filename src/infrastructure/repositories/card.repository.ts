@@ -37,6 +37,25 @@ export class PgCardRepository implements CardRepository {
     return row === undefined ? null : toCardRow(row);
   }
 
+  async lockUserCards(userId: UserId, cardIds: readonly CardId[], tx: DbTx): Promise<void> {
+    if (cardIds.length === 0) {
+      return;
+    }
+    const ordered = [...cardIds].sort((left, right) => left - right);
+    await kyselyTx(tx)
+      .selectFrom('cards')
+      .select('id')
+      .where('user_id', '=', userIdParam(userId))
+      .where(
+        'id',
+        'in',
+        ordered.map((id) => cardIdParam(id)),
+      )
+      .orderBy('id')
+      .forUpdate()
+      .execute();
+  }
+
   async listInScope(userId: UserId, date: BusinessDate, tx: DbTx): Promise<CardRow[]> {
     const rows = await kyselyTx(tx)
       .selectFrom('cards')
@@ -171,8 +190,8 @@ export class PgCardRepository implements CardRepository {
     archivedOn: BusinessDate,
     reason: ArchiveReason,
     tx: DbTx,
-  ): Promise<void> {
-    await sql`
+  ): Promise<boolean> {
+    const result = await sql<{ id: string }>`
       UPDATE cards
       SET archived_on = ${archivedOn}::date,
           archived_at = now(),
@@ -180,7 +199,10 @@ export class PgCardRepository implements CardRepository {
           frozen_on = NULL,
           frozen_at = NULL
       WHERE user_id = ${userIdParam(userId)} AND id = ${cardIdParam(cardId)}
+        AND archived_on IS NULL
+      RETURNING id
     `.execute(kyselyTx(tx));
+    return result.rows.length > 0;
   }
 
   /**

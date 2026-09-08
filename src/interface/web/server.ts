@@ -1,5 +1,6 @@
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import http from 'node:http';
+import https from 'node:https';
 import { extname, join, normalize, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -79,13 +80,21 @@ export function defaultPublicDir(): string {
  */
 export function startWebServer(
   deps: WebDeps,
-  options: { host?: string; port?: number } = {},
+  options: {
+    host?: string;
+    port?: number;
+    tls?: { cert: Buffer | string; key: Buffer | string };
+  } = {},
 ): Promise<WebServer> {
   const host = options.host ?? '127.0.0.1';
   const port = options.port ?? 3000;
-  const server = http.createServer((req, res) => {
+  const listener = (req: http.IncomingMessage, res: http.ServerResponse): void => {
     void handleRequest(deps, req, res);
-  });
+  };
+  const server =
+    options.tls === undefined
+      ? http.createServer(listener)
+      : https.createServer({ cert: options.tls.cert, key: options.tls.key }, listener);
 
   return new Promise((resolve, reject) => {
     server.once('error', reject);
@@ -153,7 +162,7 @@ async function handleRequest(
         json(res, 401, { error: 'Нужен вход' });
         return;
       }
-      await handleApi(deps, session, method, url.pathname, req, res);
+      await handleApi(deps, session, method, url.pathname, req, res, idempotencyKeyOf(req));
       return;
     }
 
@@ -249,6 +258,7 @@ async function handleApi(
   pathname: string,
   req: http.IncomingMessage,
   res: http.ServerResponse,
+  idempotencyKey: string | undefined,
 ): Promise<void> {
   const user = await deps.uow.withTelegramIdentity(session.telegramId, (tx) =>
     deps.users.getUserByTelegramId(session.telegramId, tx),
@@ -307,6 +317,7 @@ async function handleApi(
       name: parsed.name,
       amount: parseAmount(parsed.amount),
       createdOn: today,
+      ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
     });
     json(res, 201, { ok: true });
     return;
@@ -317,6 +328,7 @@ async function handleApi(
       cardId: cardId(parsed.cardId),
       amount: parseAmount(parsed.amount),
       businessDate: today,
+      ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
     });
     json(res, 200, { ok: true });
     return;
@@ -327,6 +339,7 @@ async function handleApi(
       cardId: cardId(parsed.cardId),
       newAmount: parseAmount(parsed.newAmount),
       businessDate: today,
+      ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
     });
     json(res, 200, { ok: true });
     return;
@@ -337,19 +350,27 @@ async function handleApi(
       cardId: cardId(parsed.cardId),
       newAmount: parseAmount(parsed.newAmount),
       businessDate: today,
+      ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
     });
     json(res, 200, { ok: true });
     return;
   }
   if (pathname === '/api/freeze') {
     const parsed = z.object({ cardId: cardIdSchema }).parse(body);
-    await deps.services.freeze.freeze(user.id, { cardId: cardId(parsed.cardId), frozenOn: today });
+    await deps.services.freeze.freeze(user.id, {
+      cardId: cardId(parsed.cardId),
+      frozenOn: today,
+      ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
+    });
     json(res, 200, { ok: true });
     return;
   }
   if (pathname === '/api/unfreeze') {
     const parsed = z.object({ cardId: cardIdSchema }).parse(body);
-    await deps.services.freeze.unfreeze(user.id, { cardId: cardId(parsed.cardId) });
+    await deps.services.freeze.unfreeze(user.id, {
+      cardId: cardId(parsed.cardId),
+      ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
+    });
     json(res, 200, { ok: true });
     return;
   }
@@ -360,6 +381,7 @@ async function handleApi(
       archivedOn: today,
       reason: parsed.reason,
       ...(parsed.targetCardId === undefined ? {} : { targetCardId: cardId(parsed.targetCardId) }),
+      ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
     });
     json(res, 200, { ok: true });
     return;
@@ -381,6 +403,18 @@ async function handleApi(
     return;
   }
   json(res, 404, { error: 'not found' });
+}
+
+function idempotencyKeyOf(req: http.IncomingMessage): string | undefined {
+  const raw = req.headers['idempotency-key'];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (value === undefined || value === '') {
+    return undefined;
+  }
+  if (!/^[A-Za-z0-9._:-]{8,128}$/u.test(value)) {
+    return undefined;
+  }
+  return `web:${value}`;
 }
 
 async function readJson(req: http.IncomingMessage): Promise<unknown> {

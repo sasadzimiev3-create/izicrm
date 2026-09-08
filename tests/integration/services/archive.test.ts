@@ -88,6 +88,30 @@ describe('архивирование: три причины на одних да
     expect(dashT.workingCards[0]?.balance.toFixed()).toBe('30000.00');
   });
 
+  it('параллельный TRANSFERRED не задваивает капитал', async () => {
+    const { app, userId, sber1, sber2 } = await seedPair('51106', db.pool);
+    const results = await Promise.allSettled([
+      app.archive.archive(userId, {
+        cardId: sber2.id,
+        archivedOn: D('2024-08-20'),
+        reason: 'TRANSFERRED',
+        targetCardId: sber1.id,
+      }),
+      app.archive.archive(userId, {
+        cardId: sber2.id,
+        archivedOn: D('2024-08-20'),
+        reason: 'TRANSFERRED',
+        targetCardId: sber1.id,
+      }),
+    ]);
+    const ok = results.filter((item) => item.status === 'fulfilled').length;
+    expect(ok).toBe(1);
+    const dash = await app.dashboard.getDashboard(userId, D('2024-08-20'));
+    expect(dash.totalCapital.toFixed()).toBe('30000.00');
+    expect(dash.workingCards).toHaveLength(1);
+    expect(dash.workingCards[0]?.balance.toFixed()).toBe('30000.00');
+  });
+
   it('при нулевом остатке вопрос о судьбе не задаётся, архив WITHDRAWN', async () => {
     const app = createTestApp(db.pool());
     const userId = parseUserId(await insertUser(db.pool(), '51104'));

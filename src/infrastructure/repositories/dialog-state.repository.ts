@@ -22,6 +22,45 @@ export class PgDialogStateRepository implements DialogStateRepository {
     return row === undefined ? null : toDialogStateRecord(row);
   }
 
+  async consumeUserDialogRev(
+    userId: UserId,
+    expectedRev: number,
+    tx: DbTx,
+  ): Promise<'missing' | 'stale' | number> {
+    const bumped = await kyselyTx(tx)
+      .updateTable('dialog_states')
+      .set({
+        state_rev: sql`dialog_states.state_rev + 1`,
+        updated_at: sql`now()`,
+      })
+      .where('user_id', '=', userIdParam(userId))
+      .where('state_rev', '=', expectedRev)
+      .returning(['state_rev'])
+      .executeTakeFirst();
+    if (bumped !== undefined) {
+      return bumped.state_rev;
+    }
+    const existing = await this.getUserDialogState(userId, tx);
+    return existing === null ? 'missing' : 'stale';
+  }
+
+  async restoreUserDialogRev(
+    userId: UserId,
+    fromRev: number,
+    toRev: number,
+    tx: DbTx,
+  ): Promise<void> {
+    await kyselyTx(tx)
+      .updateTable('dialog_states')
+      .set({
+        state_rev: toRev,
+        updated_at: sql`now()`,
+      })
+      .where('user_id', '=', userIdParam(userId))
+      .where('state_rev', '=', fromRev)
+      .execute();
+  }
+
   async upsertUserDialogState(
     userId: UserId,
     input: UpsertDialogStateInput,

@@ -115,6 +115,32 @@ describe('buildStatsFromLedger', () => {
     expect(stats.inOut.withdrawalShare).toEqual({ defined: false, reason: 'ZERO_BASE' });
   });
 
+  it('LOST без обновления баланса входит в месячный P&L и накопленный ряд', () => {
+    const card = makeCard({
+      id: 1,
+      createdOn: '2024-08-01',
+      name: 'Сбер',
+      archivedOn: '2024-08-05',
+      archiveReason: 'LOST',
+    });
+    const stats = buildStatsFromLedger(
+      makeLedger([card], [makeEntry(1, '2024-08-01', '100', '100')]),
+      d('2024-08-10'),
+    );
+    expect(stats.monthly.amount.toFixed()).toBe('-100.00');
+    expect(stats.allTime.defined).toBe(true);
+    if (stats.allTime.defined) {
+      expect(stats.allTime.amount.toFixed()).toBe('-100.00');
+    }
+    expect(stats.daily.defined).toBe(true);
+    if (stats.daily.defined) {
+      expect(stats.daily.amount.toFixed()).toBe('-100.00');
+    }
+    expect(stats.dailyPnlSeries.some((point) => point.date === '2024-08-05')).toBe(true);
+    expect(stats.cumulativePnlSeries.at(-1)?.amount.toFixed()).toBe('-100.00');
+    expect(stats.lastUpdateDate).toBe('2024-08-05');
+  });
+
   it('доля в работе не определена при нулевом капитале', () => {
     expect(shareOf(rub('0'), rub('0'))).toEqual({ defined: false, reason: 'ZERO_BASE' });
     const share = shareOf(rub('40'), rub('80'));

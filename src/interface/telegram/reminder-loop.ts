@@ -53,6 +53,14 @@ export function startReminderLoop(
               { userId: 0, correlationId: 'remind', err: String(error) },
               'reminder send failed',
             );
+            try {
+              await deps.services.reminder.releaseDueTelegramId(telegramId);
+            } catch (releaseError: unknown) {
+              deps.logger.error(
+                { userId: 0, correlationId: 'remind', err: String(releaseError) },
+                'reminder release failed',
+              );
+            }
           }
         }
       })

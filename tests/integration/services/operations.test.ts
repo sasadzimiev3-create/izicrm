@@ -135,6 +135,39 @@ describe('пополнение, трата, заморозка, обновлен
     expect(after.totalCapital.toFixed()).toBe('31000.00');
   });
 
+  it('проход «все» не обновляет карту, замороженную после сборки очереди', async () => {
+    const app = createTestApp(db.pool());
+    const userId = parseUserId(await insertUser(db.pool(), '51205'));
+    const card = unwrap(
+      await app.card.create(userId, {
+        name: 'В работе',
+        amount: Money.from('10000.00'),
+        icon: null,
+        createdOn: D('2024-08-19'),
+      }),
+    );
+    unwrap(
+      await app.balanceUpdate.update(userId, {
+        cardId: card.id,
+        amount: Money.from('11000.00'),
+        businessDate: D('2024-08-20'),
+      }),
+    );
+    unwrap(await app.freeze.freeze(userId, { cardId: card.id, frozenOn: D('2024-08-20') }));
+    unwrap(
+      await app.balanceUpdate.update(userId, {
+        cardId: card.id,
+        amount: Money.from('99999.00'),
+        businessDate: D('2024-08-20'),
+        workingOnly: true,
+      }),
+    );
+    const dash = await app.dashboard.getDashboard(userId, D('2024-08-20'));
+    expect(dash.frozenCards[0]?.balance.toFixed()).toBe('11000.00');
+    const peek = await app.balanceUpdate.inspectQueueCard(userId, card.id, D('2024-08-20'), 2);
+    expect(peek.kind).toBe('skip');
+  });
+
   it('T-6: сумма материалов равна общему капиталу', async () => {
     const app = createTestApp(db.pool());
     const userId = parseUserId(await insertUser(db.pool(), '51204'));

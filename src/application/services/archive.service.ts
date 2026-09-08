@@ -1,5 +1,5 @@
 import type { CardId, UserId } from '../../domain/cards/card.js';
-import { ValidationError } from '../../domain/errors.js';
+import { NotFoundError, ValidationError } from '../../domain/errors.js';
 import { isInScope } from '../../domain/finance/card-scope.js';
 import type { BusinessDate } from '../../domain/finance/period.js';
 import { Money } from '../../domain/money/money.js';
@@ -8,7 +8,7 @@ import type { DbTx } from '../ports/unit-of-work.js';
 import type { Applied, ArchiveCommand, ArchivePreview } from '../dto/commands.js';
 import type { CardRow } from '../ports/card-repository.js';
 
-import { locfForCard, once, requireActiveCard, type ServiceDeps } from './support.js';
+import { locfForCard, lockUserCards, NOT_FOUND, once, requireActiveCard, type ServiceDeps } from './support.js';
 
 /**
  * Удаление материала = архивирование. Три ненулевые ветви: перевод, вывод, потеря.
@@ -45,6 +45,11 @@ export class ArchiveService {
   async archive(userId: UserId, command: ArchiveCommand): Promise<Applied<void>> {
     return this.deps.uow.withUser(userId, (tx) =>
       once(this.deps.processed, userId, command.idempotencyKey, tx, async () => {
+        const lockIds =
+          command.reason === 'TRANSFERRED' && command.targetCardId !== undefined
+            ? [command.cardId, command.targetCardId]
+            : [command.cardId];
+        await lockUserCards(this.deps.cards, userId, lockIds, tx);
         const card = await requireActiveCard(
           this.deps.cards,
           userId,
@@ -65,13 +70,16 @@ export class ArchiveService {
           await this.transferRemainder(userId, command, locf.amount, tx);
         }
 
-        await this.deps.cards.archiveUserCard(
+        const archived = await this.deps.cards.archiveUserCard(
           userId,
           command.cardId,
           command.archivedOn,
           reason,
           tx,
         );
+        if (!archived) {
+          throw new NotFoundError(NOT_FOUND);
+        }
         await this.deps.audit.appendUserEvent(
           userId,
           {

@@ -193,7 +193,8 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-19)', () => {
     expect(stranger.last.allTexts()).toContain(COPY.notFound);
     expect(await countBalances(db.pool(), strangerId)).toBe(before);
 
-    const freezeForged = encodeCallback('freeze', ownerCardId, rev);
+    await stranger.send('/start');
+    const freezeForged = encodeCallback('freeze', ownerCardId, currentRev(stranger));
     await stranger.tap(freezeForged);
     expect(stranger.last.allTexts()).toContain(COPY.notFound);
   });

@@ -48,6 +48,14 @@ describe('диалог, пользователь и выгрузка истор�
       const cleared = await dialogs.getUserDialogState(userId, tx);
       expect(cleared?.state).toBe('Idle');
       expect(cleared?.stateRev).toBe(3);
+
+      const firstRev = await dialogs.consumeUserDialogRev(userId, 3, tx);
+      expect(firstRev).toBe(4);
+      const secondRev = await dialogs.consumeUserDialogRev(userId, 3, tx);
+      expect(secondRev).toBe('stale');
+      await dialogs.restoreUserDialogRev(userId, 4, 3, tx);
+      const restored = await dialogs.consumeUserDialogRev(userId, 3, tx);
+      expect(restored).toBe(4);
     });
   });
 

@@ -37,6 +37,8 @@ const envSchema = z.object({
   WEB_PORT: z.string().default('3000').transform((value) => portNumber(value, 'WEB_PORT')),
   WEB_PUBLIC_URL: z.string().optional(),
   WEB_SESSION_SECRET: z.string().optional(),
+  WEB_TLS_CERT_FILE: z.string().optional(),
+  WEB_TLS_KEY_FILE: z.string().optional(),
   ADMIN_TELEGRAM_IDS: z.string().optional().transform((value) => parseAdminTelegramIds(value)),
 });
 

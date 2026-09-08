@@ -7,7 +7,7 @@ import { Money } from '../../domain/money/money.js';
 import type { Applied, TopUpCommand } from '../dto/commands.js';
 import type { CardRow } from '../ports/card-repository.js';
 
-import { locfForCard, once, requireWorkingCard, type ServiceDeps } from './support.js';
+import { locfForCard, lockUserCards, once, requireWorkingCard, type ServiceDeps } from './support.js';
 
 /**
  * Пополнение: новый баланс `Y >` текущего, `capital_in += Δ` (C-26, T-10).
@@ -26,6 +26,7 @@ export class TopUpService {
   async topUp(userId: UserId, command: TopUpCommand): Promise<Applied<{ delta: Money }>> {
     return this.deps.uow.withUser(userId, (tx) =>
       once(this.deps.processed, userId, command.idempotencyKey, tx, async () => {
+        await lockUserCards(this.deps.cards, userId, [command.cardId], tx);
         await requireWorkingCard(
           this.deps.cards,
           userId,

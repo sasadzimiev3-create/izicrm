@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { loadEnv } from './config/env.js';
 import { createTelegramDeps } from './bootstrap.js';
 import { assertApplicationRole, createPool } from './infrastructure/db/pool.js';
@@ -31,7 +33,22 @@ async function main(): Promise<void> {
   const publicUrl =
     env.WEB_PUBLIC_URL === undefined || env.WEB_PUBLIC_URL === '' ? null : env.WEB_PUBLIC_URL;
   const authSecret = env.WEB_SESSION_SECRET === undefined || env.WEB_SESSION_SECRET === '' ? token : env.WEB_SESSION_SECRET;
-  const auth = createWebAuth({ secret: authSecret, publicUrl, botToken: token });
+  const tls =
+    env.WEB_TLS_CERT_FILE !== undefined &&
+    env.WEB_TLS_CERT_FILE !== '' &&
+    env.WEB_TLS_KEY_FILE !== undefined &&
+    env.WEB_TLS_KEY_FILE !== ''
+      ? {
+          cert: readFileSync(env.WEB_TLS_CERT_FILE),
+          key: readFileSync(env.WEB_TLS_KEY_FILE),
+        }
+      : undefined;
+  const auth = createWebAuth({
+    secret: authSecret,
+    publicUrl,
+    botToken: token,
+    secureCookies: tls !== undefined,
+  });
   const deps = createTelegramDeps(tracked, {
     webCabinet: {
       issueLoginUrl(userId, telegramId) {
@@ -88,8 +105,15 @@ async function main(): Promise<void> {
       }
     },
   };
-  const web = await startWebServer(webDeps, { host: env.WEB_HOST, port: env.WEB_PORT });
+  const web = await startWebServer(webDeps, {
+    host: env.WEB_HOST,
+    port: env.WEB_PORT,
+    ...(tls === undefined ? {} : { tls }),
+  });
   console.error(`web :${String(web.port)}`);
+  if (publicUrl !== null && publicUrl.startsWith('http://')) {
+    console.error('WEB_PUBLIC_URL is http:// — session cookie without Secure; use https:// in production');
+  }
 
   while (gate.isAccepting()) {
     try {

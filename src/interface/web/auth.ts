@@ -94,11 +94,13 @@ export function createWebAuth(opts: {
   publicUrl: string | null;
   botToken?: string;
   nowFn?: () => Date;
+  secureCookies?: boolean;
 }): WebAuth {
   const secret = opts.secret;
   const publicUrl = opts.publicUrl;
   const botToken = opts.botToken;
-  const cookieSecure = publicUrl !== null && publicUrl.startsWith('https://');
+  const cookieSecure =
+    opts.secureCookies === true || (publicUrl !== null && publicUrl.startsWith('https://'));
   const now = opts.nowFn ?? (() => new Date());
   const nowSec = (): number => Math.floor(now().getTime() / 1000);
 

@@ -190,6 +190,71 @@ export function lastEntryDate(ledger: Ledger): BusinessDate | undefined {
 }
 
 /**
+ * Последняя дата, когда капитал мог измениться: запись баланса или архивирование.
+ * `until` отсекает события после «сегодня» (архив в будущем в снимке не входит).
+ */
+export function lastActivityDate(ledger: Ledger, until?: BusinessDate): BusinessDate | undefined {
+  let last = lastEntryDate(ledger);
+  if (until !== undefined && last !== undefined && compareDates(last, until) > 0) {
+    const dates = indexLedger(ledger)[LEDGER_INDEX].dates;
+    last = lastDateOnOrBefore(dates, until);
+  }
+  for (const card of ledger.cards) {
+    if (card.archivedOn === null) {
+      continue;
+    }
+    if (until !== undefined && compareDates(card.archivedOn, until) > 0) {
+      continue;
+    }
+    if (last === undefined || compareDates(card.archivedOn, last) > 0) {
+      last = card.archivedOn;
+    }
+  }
+  return last;
+}
+
+function lastDateOnOrBefore(dates: readonly BusinessDate[], until: BusinessDate): BusinessDate | undefined {
+  let found: BusinessDate | undefined;
+  for (const date of dates) {
+    if (compareDates(date, until) <= 0) {
+      found = date;
+    } else {
+      break;
+    }
+  }
+  return found;
+}
+
+/**
+ * Даты наблюдений для дневного ряда: записи баланса и архивирование.
+ * Без архива ряд пропускает `LOST` без последующего обновления (T-4, T-9).
+ */
+export function observationDates(ledger: Ledger, until?: BusinessDate): BusinessDate[] {
+  const dates: BusinessDate[] = [];
+  const seen = new Set<string>();
+  const add = (date: BusinessDate): void => {
+    if (until !== undefined && compareDates(date, until) > 0) {
+      return;
+    }
+    if (seen.has(date)) {
+      return;
+    }
+    seen.add(date);
+    dates.push(date);
+  };
+  for (const date of indexLedger(ledger)[LEDGER_INDEX].dates) {
+    add(date);
+  }
+  for (const card of ledger.cards) {
+    if (card.archivedOn !== null) {
+      add(card.archivedOn);
+    }
+  }
+  dates.sort(compareDates);
+  return dates;
+}
+
+/**
  * Актуальные записи с `from ≤ effective_date ≤ to`, в порядке даты.
  */
 export function entriesInClosedRange(

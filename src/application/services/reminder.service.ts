@@ -80,4 +80,8 @@ export class ReminderService {
   async claimDueTelegramIds(now: Date): Promise<string[]> {
     return this.deps.uow.withOps((tx) => this.deps.reminders.claimDueReminders(now, tx));
   }
+
+  async releaseDueTelegramId(telegramId: string): Promise<void> {
+    await this.deps.uow.withOps((tx) => this.deps.reminders.releaseDueReminder(telegramId, tx));
+  }
 }

@@ -57,38 +57,51 @@ export class PgBalanceRepository implements BalanceRepository {
   }
 
   /**
-   * Исправление за ту же дату: сначала вытеснение актуальной строки, затем вставка.
-   * Порядок обратный тексту §6.4: частичный unique-индекс проверяется сразу при INSERT,
-   * поэтому вставка «поверх» ещё актуальной записи даёт 23505. CTE ссылается на
-   * `superseded`, чтобы UPDATE закончился до INSERT. `superseded_by = id` — как в
-   * проверенном сценарии схемы: FK требует уже существующий id, а триггер не даёт
-   * поменять `superseded_by` после первой записи.
+   * Исправление за ту же дату: вытеснить актуальную (заглушка `superseded_by = id`),
+   * вставить новую, затем в **отдельном** операторе поставить id новой строки.
+   * Два UPDATE одной строки в одном CTE PostgreSQL не применяет.
    *
    * @see docs/database.md §6.4
    */
   async insertSuperseding(userId: UserId, input: InsertBalanceInput, tx: DbTx): Promise<void> {
-    await sql`
-      WITH superseded AS (
-        UPDATE balance_entries be
-        SET superseded_at = now(), superseded_by = be.id
-        WHERE be.user_id = ${userIdParam(userId)}
-          AND be.card_id = ${cardIdParam(input.cardId)}
-          AND be.effective_date = ${input.effectiveDate}::date
-          AND be.superseded_at IS NULL
-        RETURNING be.id
-      )
+    const db = kyselyTx(tx);
+    const uid = userIdParam(userId);
+    const cid = cardIdParam(input.cardId);
+    const superseded = await sql<{ id: string }>`
+      UPDATE balance_entries be
+      SET superseded_at = now(), superseded_by = be.id
+      WHERE be.user_id = ${uid}
+        AND be.card_id = ${cid}
+        AND be.effective_date = ${input.effectiveDate}::date
+        AND be.superseded_at IS NULL
+      RETURNING be.id
+    `.execute(db);
+    const inserted = await sql<{ id: string }>`
       INSERT INTO balance_entries (
         user_id, card_id, effective_date, amount, capital_in, capital_out, source
       )
-      SELECT
-        ${userIdParam(userId)}::bigint,
-        ${cardIdParam(input.cardId)}::bigint,
+      VALUES (
+        ${uid}::bigint,
+        ${cid}::bigint,
         ${input.effectiveDate}::date,
         ${input.amount.toFixed()}::numeric,
         ${input.capitalIn.toFixed()}::numeric,
         ${input.capitalOut.toFixed()}::numeric,
         ${input.source}::balance_entry_source
-      FROM (SELECT count(*) FROM superseded) AS _gate
-    `.execute(kyselyTx(tx));
+      )
+      RETURNING id
+    `.execute(db);
+    const oldId = superseded.rows[0]?.id;
+    const newId = inserted.rows[0]?.id;
+    if (oldId === undefined || newId === undefined) {
+      return;
+    }
+    await sql`
+      UPDATE balance_entries
+      SET superseded_by = ${newId}::bigint
+      WHERE id = ${oldId}::bigint
+        AND user_id = ${uid}
+        AND superseded_by = id
+    `.execute(db);
   }
 }

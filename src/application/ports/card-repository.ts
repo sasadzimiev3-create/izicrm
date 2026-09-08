@@ -22,6 +22,7 @@ export type InsertCardInput = {
 
 export interface CardRepository {
   getUserCard(userId: UserId, cardId: CardId, tx: DbTx): Promise<CardRow | null>;
+  lockUserCards(userId: UserId, cardIds: readonly CardId[], tx: DbTx): Promise<void>;
   listInScope(userId: UserId, date: BusinessDate, tx: DbTx): Promise<CardRow[]>;
   listFrozen(userId: UserId, date: BusinessDate, tx: DbTx): Promise<CardRow[]>;
   listArchived(userId: UserId, tx: DbTx): Promise<CardRow[]>;
@@ -38,7 +39,7 @@ export interface CardRepository {
     archivedOn: BusinessDate,
     reason: ArchiveReason,
     tx: DbTx,
-  ): Promise<void>;
+  ): Promise<boolean>;
   flowsInRange(
     userId: UserId,
     from: BusinessDate,

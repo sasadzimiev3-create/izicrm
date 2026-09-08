@@ -214,10 +214,15 @@ function downsample(points, max) {
 }
 
 async function api(path, options) {
+  const method = (options && options.method) || 'GET';
+  const headers = { 'content-type': 'application/json', ...(options && options.headers) };
+  if (method !== 'GET' && method !== 'HEAD' && headers['idempotency-key'] === undefined) {
+    headers['idempotency-key'] = crypto.randomUUID();
+  }
   const res = await fetch(path, {
     credentials: 'same-origin',
-    headers: { 'content-type': 'application/json', ...(options && options.headers) },
     ...options,
+    headers,
   });
   if (res.status === 204) return null;
   const body = await res.json().catch(() => ({}));
@@ -541,7 +546,32 @@ function layoutPlot(width, height, pad) {
   };
 }
 
-function drawGrid(ctx, plot, ticks, xLabels, ink, grid, step) {
+function minKopecks(values) {
+  return values.reduce((min, value) => (value < min ? value : min));
+}
+
+function relRubles(k, origin) {
+  return Number(k - origin) / 100;
+}
+
+function fmtAxisFromOrigin(rel, origin, step) {
+  const k = origin + BigInt(Math.round(rel * 100));
+  const neg = k < 0n;
+  const abs = neg ? -k : k;
+  const rub = abs / 100n;
+  const sign = neg ? '−' : '';
+  if (step >= 1_000_000) {
+    const mln = abs / 100_000_000n;
+    const tenth = (abs / 10_000_000n) % 10n;
+    return `${sign}${mln.toString()}.${tenth.toString()}${NARROW}млн`;
+  }
+  if (step >= 1000) {
+    return `${sign}${(abs / 100_000n).toString()}${NARROW}тыс`;
+  }
+  return `${sign}${rub.toString().replace(/\B(?=(\d{3})+(?!\d))/g, NARROW)}`;
+}
+
+function drawGrid(ctx, plot, ticks, xLabels, ink, grid, step, originK) {
   ctx.save();
   ctx.font = '11px "Segoe UI", system-ui, sans-serif';
   ctx.fillStyle = ink;
@@ -555,7 +585,9 @@ function drawGrid(ctx, plot, ticks, xLabels, ink, grid, step) {
     ctx.stroke();
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
-    ctx.fillText(fmtAxisMoney(tick, step), plot.x0 - 8, y);
+    const label =
+      originK === undefined ? fmtAxisMoney(tick, step) : fmtAxisFromOrigin(tick, originK, step);
+    ctx.fillText(label, plot.x0 - 8, y);
   });
   xLabels.forEach((label) => {
     ctx.textAlign = 'center';
@@ -644,7 +676,9 @@ function drawCapitalFrame(progress) {
     ctx.fillText('Пока нет точек баланса', plotBase.x0, plotBase.y0 + 24);
     return;
   }
-  const values = points.map((p) => num(p.capital));
+  const ks = points.map((p) => moneyToKopecks(p.capital));
+  const origin = minKopecks(ks);
+  const values = ks.map((k) => relRubles(k, origin));
   const scale = niceTicks(Math.min(...values), Math.max(...values), 3);
   const plot = { ...plotBase, min: scale.min, max: scale.max };
   const view = plotView(state.data.today, state.range, state.data.capitalSeries);
@@ -660,6 +694,7 @@ function drawCapitalFrame(progress) {
     'rgba(255,255,255,0.72)',
     'rgba(255,255,255,0.14)',
     scale.step,
+    origin,
   );
 
   const shown = Math.max(2, Math.round((points.length - 1) * progress) + 1);
@@ -759,7 +794,6 @@ function cumulativePoints() {
       return {
         date: point.date,
         amount: k,
-        value: Number(k) / 100,
         formatted: kopecksToDelta(k),
       };
     }),
@@ -794,9 +828,12 @@ function drawCumFrame(progress) {
     ctx.fillText('Пока нет накопленной прибыли', plotBase.x0, plotBase.y0 + 24);
     return;
   }
-  const values = points.map((p) => p.value);
-  const lo = Math.min(0, ...values);
-  const hi = Math.max(0, ...values);
+  const ks = points.map((p) => p.amount);
+  const origin = minKopecks([...ks, 0n]);
+  const values = ks.map((k) => relRubles(k, origin));
+  const zeroRel = relRubles(0n, origin);
+  const lo = Math.min(zeroRel, ...values);
+  const hi = Math.max(zeroRel, ...values);
   const scale = niceTicks(lo, hi, 3);
   const plot = { ...plotBase, min: scale.min, max: scale.max };
   const xAt = (i) => xAtDate(points[i].date, view.from, view.to, plot);
@@ -811,9 +848,10 @@ function drawCumFrame(progress) {
     '#8a8680',
     'rgba(255,255,255,0.06)',
     scale.step,
+    origin,
   );
 
-  const zeroY = yAt(0);
+  const zeroY = yAt(zeroRel);
   ctx.beginPath();
   ctx.strokeStyle = 'rgba(246,244,243,0.28)';
   ctx.moveTo(plot.x0, zeroY);
@@ -822,8 +860,8 @@ function drawCumFrame(progress) {
 
   const shown = Math.max(2, Math.round((points.length - 1) * progress) + 1);
   const visible = points.slice(0, shown);
-  const lastVal = values[visible.length - 1];
-  const up = lastVal >= 0;
+  const lastK = ks[visible.length - 1];
+  const up = lastK >= 0n;
   const stroke = up ? '#4ade80' : '#f87171';
 
   ctx.beginPath();
@@ -852,7 +890,7 @@ function drawCumFrame(progress) {
   ctx.fill();
 
   const last = visible.length - 1;
-  drawAnchor(ctx, xAt(last), yAt(values[last]), values[last] < 0 ? '#e10f04' : '#1a9365');
+  drawAnchor(ctx, xAt(last), yAt(values[last]), ks[last] < 0n ? '#e10f04' : '#1a9365');
 
   const hover = state.hoverCum;
   if (!hover) return;
@@ -872,7 +910,7 @@ function drawCumFrame(progress) {
   ctx.arc(hx, hy, 5, 0, Math.PI * 2);
   ctx.fill();
   ctx.beginPath();
-  ctx.fillStyle = values[idx] < 0 ? '#e10f04' : '#1a9365';
+  ctx.fillStyle = ks[idx] < 0n ? '#e10f04' : '#1a9365';
   ctx.arc(hx, hy, 2.5, 0, Math.PI * 2);
   ctx.fill();
 }
@@ -911,12 +949,15 @@ function drawPnlFrame() {
     ctx.fillText('В этом окне нет наблюдений прибыли', plotBase.x0, plotBase.y0 + 28);
     return;
   }
-  const values = points.map((p) => num(p.amount));
-  const lo = Math.min(0, ...values);
-  const hi = Math.max(0, ...values);
+  const ks = points.map((p) => moneyToKopecks(p.amount));
+  const origin = minKopecks([...ks, 0n]);
+  const values = ks.map((k) => relRubles(k, origin));
+  const zeroRel = relRubles(0n, origin);
+  const lo = Math.min(zeroRel, ...values);
+  const hi = Math.max(zeroRel, ...values);
   const scale = niceTicks(lo, hi, 3);
   const plot = { ...plotBase, min: scale.min, max: scale.max };
-  const zeroY = plot.y0 + ((plot.max - 0) / (plot.max - plot.min)) * plot.innerH;
+  const zeroY = plot.y0 + ((plot.max - zeroRel) / (plot.max - plot.min)) * plot.innerH;
   const gap = 4;
   const barW = Math.max(4, Math.min(36, (plot.innerW / points.length) - gap));
   const xAt = (i) => {
@@ -933,6 +974,7 @@ function drawPnlFrame() {
     '#8a8680',
     'rgba(255,255,255,0.06)',
     scale.step,
+    origin,
   );
   ctx.beginPath();
   ctx.strokeStyle = 'rgba(246,244,243,0.28)';
@@ -946,7 +988,7 @@ function drawPnlFrame() {
     const top = Math.min(y, zeroY);
     const h = Math.max(2, Math.abs(zeroY - y));
     const active = state.hoverPnl && state.hoverPnl.date === p.date;
-    ctx.fillStyle = values[i] < 0 ? (active ? '#f87171' : '#e10f04') : active ? '#4ade80' : '#1a9365';
+    ctx.fillStyle = ks[i] < 0n ? (active ? '#f87171' : '#e10f04') : active ? '#4ade80' : '#1a9365';
     fillRoundRect(ctx, x - barW / 2, top, barW, h, 4);
   });
 }

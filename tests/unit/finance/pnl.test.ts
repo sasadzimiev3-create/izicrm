@@ -600,6 +600,26 @@ describe('прочие сценарии матрицы', () => {
     expectMoney(monthlyPnl(makeLedger([], []), 2024, 8).amount, '0');
   });
 
+  it('FT-08g: LOST в середине месяца без обновления баланса — месячный = −остаток', () => {
+    const card = makeCard({
+      id: 1,
+      createdOn: '2024-08-01',
+      archivedOn: '2024-08-05',
+      archiveReason: 'LOST',
+    });
+    const ledger = makeLedger([card], [makeEntry(1, '2024-08-01', '100', '100')]);
+    const today = d('2024-08-10');
+    const monthly = monthlyPnl(ledger, 2024, 8, today);
+    const all = allTimePnl(ledger, today);
+    const daily = dailyPnl(ledger, today);
+    expectMoney(monthly.amount, '-100');
+    expect(all.defined && daily.defined).toBe(true);
+    if (all.defined && daily.defined) {
+      expectMoney(all.amount, '-100');
+      expectMoney(daily.amount, '-100');
+    }
+  });
+
   it('allTimePnl считает через periodPnl, база доходности — депозиты', () => {
     const card = makeCard({ id: 1, createdOn: '2024-08-01' });
     const ledger = makeLedger(

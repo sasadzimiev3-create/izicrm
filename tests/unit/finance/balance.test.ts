@@ -6,7 +6,9 @@ import {
   entriesInClosedRange,
   firstEntryDate,
   indexLedger,
+  lastActivityDate,
   lastEntryDate,
+  observationDates,
   previousUpdateDate,
 } from '../../../src/domain/finance/balance.js';
 import { d, expectMoney, makeCard, makeEntry, makeLedger } from './fixtures.js';
@@ -48,11 +50,46 @@ describe('даты обновлений', () => {
     expect(previousUpdateDate(ledger, d('2024-08-10'))).toBeUndefined();
   });
 
-  it('first / last', () => {
+  it('first / last и активность с архивом', () => {
     expect(firstEntryDate(ledger)).toBe('2024-08-10');
     expect(lastEntryDate(ledger)).toBe('2024-08-14');
     expect(firstEntryDate(makeLedger([], []))).toBeUndefined();
     expect(lastEntryDate(makeLedger([], []))).toBeUndefined();
+    const lost = makeLedger(
+      [
+        makeCard({
+          id: 1,
+          createdOn: '2024-08-01',
+          archivedOn: '2024-08-05',
+          archiveReason: 'LOST',
+        }),
+      ],
+      [makeEntry(1, '2024-08-01', '100')],
+    );
+    expect(lastActivityDate(lost)).toBe('2024-08-05');
+    expect(lastActivityDate(lost, d('2024-08-04'))).toBe('2024-08-01');
+    expect(observationDates(lost, d('2024-08-10'))).toEqual(['2024-08-01', '2024-08-05']);
+    expect(observationDates(lost, d('2024-08-04'))).toEqual(['2024-08-01']);
+    expect(
+      observationDates(
+        makeLedger(
+          [
+            makeCard({
+              id: 1,
+              createdOn: '2024-08-01',
+              archivedOn: '2024-08-01',
+              archiveReason: 'LOST',
+            }),
+          ],
+          [makeEntry(1, '2024-08-01', '100')],
+        ),
+      ),
+    ).toEqual(['2024-08-01']);
+    const later = makeLedger(
+      [makeCard({ id: 1, createdOn: '2024-08-01' })],
+      [makeEntry(1, '2024-08-01', '100'), makeEntry(1, '2024-08-10', '110')],
+    );
+    expect(lastActivityDate(later, d('2024-08-05'))).toBe('2024-08-01');
   });
 });
 

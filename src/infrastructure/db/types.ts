@@ -106,9 +106,10 @@ export type DialogStatesTable = {
 };
 
 export type ProcessedUpdatesTable = {
-  update_id: BigIntString;
+  update_id: string;
   user_id: BigIntString | null;
   processed_at: Generated<Timestamptz>;
+  completed: Generated<boolean>;
 };
 
 export type AuditLogTable = {

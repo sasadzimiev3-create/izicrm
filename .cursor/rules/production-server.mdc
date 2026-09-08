@@ -7,7 +7,13 @@ alwaysApply: true
 
 Бот в проде **не на Mac**. VPS: Ubuntu 20.04, IP `31.76.53.4`, SSH `root@31.76.53.4`.
 Код на сервере: `/opt/izicrm`. Стек: Docker Compose (`postgres` + `bot`, образ `izicrm-bot:local`).
-Кабинет: `http://31.76.53.4:3000` (`WEB_PUBLIC_URL` в `/opt/izicrm/.env`).
+Кабинет: публичный адрес только через **HTTPS** (`WEB_PUBLIC_URL=https://…`). Сейчас на VPS ещё
+может быть `http://31.76.53.4:3000` — это перехват session cookie. Варианты:
+
+- сертификат в `WEB_TLS_CERT_FILE` / `WEB_TLS_KEY_FILE` (Node слушает TLS на 3000);
+- TLS-терминатор перед контейнером и `WEB_PUBLIC_URL=https://…` (флаг `Secure` у cookie).
+
+Пока URL на `http://`, cookie **без** `Secure` — так логин по HTTP не ломается, но трафик открыт.
 
 Правки в Cursor **сами в Telegram не попадают**. Выкат: собрать образ на Mac под **linux/amd64**,
 залить, пересоздать контейнер. Сервер — x86_64; образы с Apple Silicon без `--platform linux/amd64`

@@ -14,6 +14,9 @@ describe('once — ключ идемпотентности', () => {
       claim: async () => {
         throw new Error('claim must not run without key');
       },
+      complete: async () => {
+        throw new Error('complete must not run without key');
+      },
     };
     const result = await once(processed, USER, undefined, TX, async () => {
       work += 1;

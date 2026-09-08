@@ -1,5 +1,5 @@
 import type { CardRow } from '../ports/card-repository.js';
-import { balanceAsOf, lastEntryDate, type Ledger } from '../../domain/finance/balance.js';
+import { balanceAsOf, lastActivityDate, type Ledger } from '../../domain/finance/balance.js';
 import { cardBalanceChange } from '../../domain/finance/card-change.js';
 import { capitalAsOf, frozenCapitalAsOf, workingCapitalAsOf } from '../../domain/finance/capital.js';
 import { isFrozen, isInScope, isWorking } from '../../domain/finance/card-scope.js';
@@ -19,17 +19,8 @@ function monthOf(date: BusinessDate): { year: number; month: number } {
   };
 }
 
-function lastActivityDate(ledger: Ledger, today: BusinessDate): BusinessDate | null {
-  let last = lastEntryDate(ledger);
-  for (const card of ledger.cards) {
-    if (card.archivedOn === null || card.archivedOn > today) {
-      continue;
-    }
-    if (last === undefined || card.archivedOn > last) {
-      last = card.archivedOn;
-    }
-  }
-  return last ?? null;
+function lastSeenActivity(ledger: Ledger, today: BusinessDate): BusinessDate | null {
+  return lastActivityDate(ledger, today) ?? null;
 }
 
 function toDashboardCard(ledger: Ledger, card: CardRow, asOf: BusinessDate): DashboardCard {
@@ -56,7 +47,7 @@ export class DashboardService {
     const from = monthStart(year, month);
     return this.deps.uow.withUser(userId, async (tx) => {
       const ledger = await loadLedger(this.deps.reports, userId, from, today, tx);
-      const lastUpdateDate = lastActivityDate(ledger, today);
+      const lastUpdateDate = lastSeenActivity(ledger, today);
       const working: DashboardCard[] = [];
       const frozen: DashboardCard[] = [];
       for (const card of ledger.cards) {
@@ -73,7 +64,7 @@ export class DashboardService {
         frozenCapital: frozenCapitalAsOf(ledger, today),
         totalCapital: capitalAsOf(ledger, today),
         daily: dailyPnl(ledger, today),
-        monthly: monthlyPnl(ledger, year, month),
+        monthly: monthlyPnl(ledger, year, month, today),
         workingCards: working,
         frozenCards: frozen,
       };

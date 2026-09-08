@@ -1,5 +1,12 @@
 import type { CardRow } from '../ports/card-repository.js';
-import { balanceAsOf, firstEntryDate, indexLedger, lastEntryDate, type Ledger } from '../../domain/finance/balance.js';
+import {
+  balanceAsOf,
+  firstEntryDate,
+  indexLedger,
+  lastActivityDate,
+  observationDates,
+  type Ledger,
+} from '../../domain/finance/balance.js';
 import { cardBalanceChange } from '../../domain/finance/card-change.js';
 import { capitalAsOf, frozenCapitalAsOf, workingCapitalAsOf } from '../../domain/finance/capital.js';
 import { isFrozen, isWorking } from '../../domain/finance/card-scope.js';
@@ -102,17 +109,8 @@ function monthOf(date: BusinessDate): { year: number; month: number } {
   };
 }
 
-function lastActivityDate(ledger: Ledger, today: BusinessDate): BusinessDate | null {
-  let last = lastEntryDate(ledger);
-  for (const card of ledger.cards) {
-    if (card.archivedOn === null || card.archivedOn > today) {
-      continue;
-    }
-    if (last === undefined || card.archivedOn > last) {
-      last = card.archivedOn;
-    }
-  }
-  return last ?? null;
+function lastSeenActivity(ledger: Ledger, today: BusinessDate): BusinessDate | null {
+  return lastActivityDate(ledger, today) ?? null;
 }
 
 /**
@@ -253,7 +251,7 @@ export function buildStatsFromLedger(
   const monthlySeries: MonthlyPnlPoint[] = [];
   let windows = emptyWindows(today);
   if (first !== undefined) {
-    for (const date of uniqueObservationDates(indexed)) {
+    for (const date of observationDates(indexed, today)) {
       const point = dailyPnl(indexed, date);
       if (!point.defined) {
         continue;
@@ -271,7 +269,7 @@ export function buildStatsFromLedger(
       cumulativePnlSeries.push({ date, amount: cumulative });
     }
     for (const item of monthsInclusive(first, today)) {
-      const pnl = monthlyPnl(indexed, item.year, item.month);
+      const pnl = monthlyPnl(indexed, item.year, item.month, today);
       monthlySeries.push({
         year: item.year,
         month: item.month,
@@ -290,14 +288,14 @@ export function buildStatsFromLedger(
 
   return {
     today,
-    lastUpdateDate: lastActivityDate(indexed, today),
+    lastUpdateDate: lastSeenActivity(indexed, today),
     totalCapital,
     workingCapital,
     frozenCapital,
     workingShare: shareOf(workingCapital, totalCapital),
     inOut: capitalInOut(indexed, today),
     daily: dailyPnl(indexed, today),
-    monthly: monthlyPnl(indexed, year, month),
+    monthly: monthlyPnl(indexed, year, month, today),
     allTime: allTimePnl(indexed, today),
     materials,
     capitalSeries,
@@ -308,19 +306,6 @@ export function buildStatsFromLedger(
   };
 }
 
-function uniqueObservationDates(ledger: Ledger): BusinessDate[] {
-  const dates: BusinessDate[] = [];
-  const seen = new Set<string>();
-  for (const entry of indexLedger(ledger).entries) {
-    if (seen.has(entry.effectiveDate)) {
-      continue;
-    }
-    seen.add(entry.effectiveDate);
-    dates.push(entry.effectiveDate);
-  }
-  dates.sort(compareDates);
-  return dates;
-}
 
 /**
  * Кабинет: капитал, P&L и журнал из тех же строк, что Telegram.

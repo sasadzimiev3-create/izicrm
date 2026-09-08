@@ -11,8 +11,10 @@ import type { DbTx } from './unit-of-work.js';
  */
 export interface ProcessedUpdateRepository {
   /**
-   * Пытается занять ключ. `true` — ключ новый, операцию нужно выполнить.
+   * Пытается занять ключ. `true` — ключ новый (или незавершённый pending), операцию нужно выполнить.
    * `false` — ключ уже обработан, повторно писать нельзя.
    */
-  claim(userId: UserId, updateId: string, tx: DbTx): Promise<boolean>;
+  claim(userId: UserId, updateId: string, tx: DbTx, pending?: boolean): Promise<boolean>;
+  /** Помечает pending-ключ завершённым. Повторная доставка после этого игнорируется. */
+  complete(userId: UserId, updateId: string, tx: DbTx): Promise<void>;
 }

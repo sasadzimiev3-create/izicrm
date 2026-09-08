@@ -30,7 +30,7 @@ export type Effect =
   | { t: 'ShowFrozenMenu'; cardId: CardId }
   | { t: 'ApplyUnfreeze'; cardId: CardId }
   | { t: 'PromptUpdate' }
-  | { t: 'ApplyUpdate'; cardId: CardId; amount: string; businessDate: BusinessDate }
+  | { t: 'ApplyUpdate'; cardId: CardId; amount: string; businessDate: BusinessDate; workingOnly: boolean }
   | { t: 'ShowArchiveList' }
   | { t: 'PromptArchiveConfirm'; cardId: CardId }
   | { t: 'PromptDisposition'; name: string; remainder: string }

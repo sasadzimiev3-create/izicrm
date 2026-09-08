@@ -333,6 +333,7 @@ function reduceBalanceUpdate(
         cardId,
         amount: event.amount,
         businessDate: state.businessDate,
+        workingOnly: state.queue.length > 1,
       });
     }
     case 'Skip': {
