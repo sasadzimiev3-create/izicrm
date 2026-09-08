@@ -45,4 +45,9 @@ export type DialogEvent =
   | { t: 'ArchiveTarget'; cardId: CardId }
   | { t: 'NotFound' }
   | { t: 'Stale' }
-  | { t: 'NoWorkingCards' };
+  | { t: 'NoWorkingCards' }
+  | { t: 'Reminders' }
+  | { t: 'RemindToggleDay'; bit: number }
+  | { t: 'RemindAdjustMinutes'; delta: number }
+  | { t: 'RemindSetEnabled'; enabled: boolean }
+  | { t: 'RemindNeedDays' };

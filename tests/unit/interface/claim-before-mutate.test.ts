@@ -65,6 +65,7 @@ function makeDeps(claimed: Set<string>, freezeCalls: number[]): TelegramDeps {
     uow: {
       withUser: async (_userId, work) => work(TX),
       withTelegramIdentity: async (_telegramId, work) => work(TX),
+      withOps: async (work) => work(TX),
     },
     users: {
       findOrCreateByTelegramId: async () => USER,

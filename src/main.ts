@@ -4,6 +4,8 @@ import { assertApplicationRole, createPool } from './infrastructure/db/pool.js';
 import { createDataAccess } from './infrastructure/db/data-access.js';
 import { createTelegramBot } from './infrastructure/telegram/bot.js';
 import { registerTelegramHandlers } from './interface/telegram/handlers/register.js';
+import { startReminderLoop } from './interface/telegram/reminder-loop.js';
+import { COPY } from './interface/telegram/views/copy.js';
 import { createWebAuth } from './interface/web/auth.js';
 import { createRapiraQuoteSource } from './infrastructure/market/rapira.js';
 import { defaultPublicDir, startWebServer } from './interface/web/server.js';
@@ -54,6 +56,15 @@ async function main(): Promise<void> {
     }
   });
   registerTelegramHandlers(bot, deps);
+  const reminders = startReminderLoop(bot, {
+    services: deps.services,
+    uow: deps.uow,
+    users: deps.users,
+    clock: deps.clock,
+    logger: deps.logger,
+    gate,
+    text: COPY.remindPush,
+  });
 
   const health = await startHealthServer(
     { appPool: pool, migrationsPool: pool },
@@ -71,6 +82,11 @@ async function main(): Promise<void> {
     publicDir: defaultPublicDir(),
     botUsername: null as string | null,
     quotes: createRapiraQuoteSource(),
+    async notifyAdmins(text: string) {
+      for (const adminId of env.ADMIN_TELEGRAM_IDS) {
+        await bot.api.sendMessage(adminId, text);
+      }
+    },
   };
   const web = await startWebServer(webDeps, { host: env.WEB_HOST, port: env.WEB_PORT });
   console.error(`web :${String(web.port)}`);
@@ -89,7 +105,7 @@ async function main(): Promise<void> {
     }
   }
 
-  await finalizeRuntime({ bot, pool, health, web, gate });
+  await finalizeRuntime({ bot, pool, health, web, reminders, gate });
 }
 
 function delay(ms: number): Promise<void> {

@@ -167,6 +167,16 @@ function reduceIdle(event: DialogEvent): ReduceResult {
       return result(IDLE, { t: 'ShowArchived' });
     case 'Archive':
       return result({ t: 'ArchiveConfirm', cardId: event.cardId }, { t: 'PromptArchiveConfirm', cardId: event.cardId });
+    case 'Reminders':
+      return result(IDLE, { t: 'ShowReminders' });
+    case 'RemindToggleDay':
+      return result(IDLE, { t: 'ApplyRemindDay', bit: event.bit }, { t: 'ShowReminders' });
+    case 'RemindAdjustMinutes':
+      return result(IDLE, { t: 'ApplyRemindMinutes', delta: event.delta }, { t: 'ShowReminders' });
+    case 'RemindSetEnabled':
+      return result(IDLE, { t: 'ApplyRemindEnabled', enabled: event.enabled }, { t: 'ShowReminders' });
+    case 'RemindNeedDays':
+      return result(IDLE, { t: 'RemindNeedDays' }, { t: 'ShowReminders' });
     default:
       return result(IDLE, { t: 'ShowHome' });
   }

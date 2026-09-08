@@ -44,6 +44,11 @@ export const COPY = {
   promptUpdate: (name: string, index: number, total: number, previous: string) =>
     `${name}  (${index} из ${total})\nПредыдущий баланс: ${previous}\n\nВведите текущий баланс:`,
   settingsTitle: 'Настройки',
+  remind: 'Напоминания',
+  remindEnable: 'Включить',
+  remindDisable: 'Выключить',
+  remindNeedDays: 'Выберите хотя бы один день',
+  remindPush: 'Занесите данные в систему!',
   webCabinet: 'Веб-кабинет',
   webOpen: 'Открыть кабинет',
   webLink: 'Ссылка на кабинет. Действует 12 часов. Данные те же, что в Telegram.',

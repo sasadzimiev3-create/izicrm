@@ -89,6 +89,13 @@ describe('FSM reduce — без Telegram', () => {
     expect(JSON.stringify(state)).not.toMatch(/Rename|IconChange|PromptRename|PromptSetIcon/);
   });
 
+  it('напоминания остаются в Idle и меняют дни', () => {
+    const open = reduce(IDLE, { t: 'Reminders' });
+    expect(open.effects).toEqual([{ t: 'ShowReminders' }]);
+    const day = reduce(IDLE, { t: 'RemindToggleDay', bit: 0 });
+    expect(day.effects).toEqual([{ t: 'ApplyRemindDay', bit: 0 }, { t: 'ShowReminders' }]);
+  });
+
   it('cancel из любого шага возвращает Idle', () => {
     const mid = { t: 'CardCreateBalance' as const, name: 'X' };
     expect(reduce(mid, { t: 'Cancel' }).next).toEqual(IDLE);

@@ -30,7 +30,12 @@ export type CallbackAction =
   | 'transferred'
   | 'target'
   | 'cancel'
-  | 'page';
+  | 'page'
+  | 'remind'
+  | 'rem_d'
+  | 'rem_h'
+  | 'rem_m'
+  | 'rem_en';
 
 const ACTIONS = new Set<string>([
   'home',
@@ -62,6 +67,11 @@ const ACTIONS = new Set<string>([
   'target',
   'cancel',
   'page',
+  'remind',
+  'rem_d',
+  'rem_h',
+  'rem_m',
+  'rem_en',
 ]);
 
 export type ParsedCallback =

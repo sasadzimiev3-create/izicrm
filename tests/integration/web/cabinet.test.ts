@@ -88,6 +88,19 @@ describe('веб-кабинет и изоляция', () => {
       expect(strangerBody.journal).toHaveLength(0);
       expect(strangerBody.totalCapital.amount).toBe('0.00');
 
+      const saved = await fetch(`${base}/api/reminders`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', cookie: ownerCookie },
+        body: JSON.stringify({ enabled: true, time: '21:00', days: [0, 2, 4] }),
+      });
+      expect(saved.status).toBe(200);
+      const savedBody = (await saved.json()) as { enabled: boolean; time: string; days: number[] };
+      expect(savedBody).toEqual({ enabled: true, time: '21:00', days: [0, 2, 4] });
+      const strangerRem = await fetch(`${base}/api/reminders`, { headers: { cookie: strangerCookie } });
+      const strangerRemBody = (await strangerRem.json()) as { enabled: boolean; days: number[] };
+      expect(strangerRemBody.enabled).toBe(false);
+      expect(strangerRemBody.days).toEqual([]);
+
       unwrap(
         await services.balanceUpdate.update(ownerId, {
           cardId: dash.workingCards[0]!.id,

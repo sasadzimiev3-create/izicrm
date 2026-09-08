@@ -1083,7 +1083,9 @@ const OP_STEPS = {
 function showOpMenu() {
   $('op-kind').value = '';
   $('op-menu').classList.remove('hidden');
+  $('op-extra').classList.remove('hidden');
   $('op-form').classList.add('hidden');
+  $('remind-form').classList.add('hidden');
   showError('op-error', '');
   $('op-amount').value = '';
   $('op-name').value = '';
@@ -1101,6 +1103,7 @@ function openOp(kind, cardId) {
   $('card-field').classList.toggle('hidden', kind === 'create');
   $('op-name').required = kind === 'create';
   $('op-menu').classList.add('hidden');
+  $('op-extra').classList.add('hidden');
   $('op-form').classList.remove('hidden');
   showError('op-error', '');
   if (kind !== 'create' && cardId) {
@@ -1202,6 +1205,93 @@ $('op-menu').addEventListener('click', (event) => {
   const btn = event.target.closest('button[data-kind]');
   if (!btn) return;
   openOp(btn.dataset.kind);
+});
+
+const REMIND_DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+const remindState = { days: [] };
+
+function paintRemindDays() {
+  $('remind-days').innerHTML = REMIND_DAYS.map(
+    (label, bit) =>
+      `<button type="button" class="remind-day${remindState.days.includes(bit) ? ' is-on' : ''}" data-day="${bit}">${label}</button>`,
+  ).join('');
+}
+
+async function openReminders() {
+  showError('remind-error', '');
+  $('remind-ok').classList.add('hidden');
+  $('op-menu').classList.add('hidden');
+  $('op-extra').classList.add('hidden');
+  $('op-form').classList.add('hidden');
+  $('remind-form').classList.remove('hidden');
+  const data = await api('/api/reminders');
+  $('remind-enabled').checked = Boolean(data.enabled);
+  $('remind-time').value = data.time || '21:00';
+  remindState.days = Array.isArray(data.days) ? data.days.map(Number) : [];
+  paintRemindDays();
+}
+
+$('open-reminders').addEventListener('click', () => {
+  openReminders().catch((error) => showError('remind-error', error.message));
+});
+
+$('remind-back').addEventListener('click', () => showOpMenu());
+
+$('remind-days').addEventListener('click', (event) => {
+  const btn = event.target.closest('[data-day]');
+  if (!btn) return;
+  const bit = Number(btn.dataset.day);
+  if (remindState.days.includes(bit)) {
+    remindState.days = remindState.days.filter((day) => day !== bit);
+  } else {
+    remindState.days = [...remindState.days, bit].sort((a, b) => a - b);
+  }
+  paintRemindDays();
+});
+
+$('remind-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  showError('remind-error', '');
+  $('remind-ok').classList.add('hidden');
+  try {
+    const saved = await api('/api/reminders', {
+      method: 'PUT',
+      body: JSON.stringify({
+        enabled: $('remind-enabled').checked,
+        time: $('remind-time').value,
+        days: remindState.days,
+      }),
+    });
+    $('remind-enabled').checked = Boolean(saved.enabled);
+    $('remind-time').value = saved.time || '21:00';
+    remindState.days = Array.isArray(saved.days) ? saved.days.map(Number) : [];
+    paintRemindDays();
+    $('remind-ok').classList.remove('hidden');
+  } catch (error) {
+    showError('remind-error', error.message);
+  }
+});
+
+$('open-feedback').addEventListener('click', () => {
+  showError('feedback-error', '');
+  $('feedback-text').value = '';
+  $('feedback-dialog').showModal();
+});
+
+$('feedback-cancel').addEventListener('click', () => $('feedback-dialog').close());
+
+$('feedback-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  showError('feedback-error', '');
+  try {
+    await api('/api/feedback', {
+      method: 'POST',
+      body: JSON.stringify({ message: $('feedback-text').value }),
+    });
+    $('feedback-dialog').close();
+  } catch (error) {
+    showError('feedback-error', error.message);
+  }
 });
 
 $('op-back').addEventListener('click', () => showOpMenu());

@@ -2,6 +2,7 @@ import { formatMoney } from '../../../domain/money/format.js';
 import type { CardId } from '../../../domain/cards/card.js';
 import type { Money } from '../../../domain/money/money.js';
 
+import { formatClock, hasDay, WEEKDAY_SHORT, type ReminderSettings } from '../../../application/dto/reminder.js';
 import { encodeCallback, type CallbackAction } from './callback-data.js';
 import { COPY } from '../views/copy.js';
 import { formatCardTitle } from '../views/dashboard.view.js';
@@ -49,6 +50,7 @@ export function mainKeyboard(
   if (opts.empty === true) {
     return [
       [btn(COPY.topUpMenu, 'topup', null, rev, 'success')],
+      [btn('⚙️ Настройки', 'settings', null, rev)],
       [btn(`💻 ${COPY.webCabinet}`, 'web', null, rev)],
     ];
   }
@@ -105,9 +107,34 @@ export function expenseMenuKeyboard(rev: number): Keyboard {
 
 export function settingsKeyboard(rev: number): Keyboard {
   return [
+    [btn(`🔔 ${COPY.remind}`, 'remind', null, rev)],
     [btn(`🗑 ${COPY.deleteMaterial}`, 'arch_pick', null, rev)],
     [btn(`📁 ${COPY.archiveMaterials}`, 'arch_list', null, rev)],
     backRow(rev),
+  ];
+}
+
+export function remindersKeyboard(settings: ReminderSettings, rev: number): Keyboard {
+  const dayRows: Keyboard = [];
+  for (let i = 0; i < WEEKDAY_SHORT.length; i += 3) {
+    const row: KeyboardButton[] = [];
+    for (let bit = i; bit < Math.min(i + 3, WEEKDAY_SHORT.length); bit += 1) {
+      const label = WEEKDAY_SHORT[bit] ?? '';
+      const mark = hasDay(settings.days, bit) ? '✓ ' : '';
+      row.push(btn(`${mark}${label}`, 'rem_d', bit, rev));
+    }
+    dayRows.push(row);
+  }
+  const clock = formatClock(settings.notifyMinute);
+  const toggle = settings.enabled
+    ? btn(COPY.remindDisable, 'rem_en', 0, rev)
+    : btn(COPY.remindEnable, 'rem_en', 1, rev);
+  return [
+    ...dayRows,
+    [btn('−1 ч', 'rem_h', -1, rev), btn(clock, 'remind', null, rev), btn('+1 ч', 'rem_h', 1, rev)],
+    [btn('−15 мин', 'rem_m', -15, rev), btn('+15 мин', 'rem_m', 15, rev)],
+    [toggle],
+    [btn(`◀️ ${COPY.back}`, 'settings', null, rev)],
   ];
 }
 

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Silians — кабинет</title>
-    <link rel="stylesheet" href="/app.css?v=21" />
+    <link rel="stylesheet" href="/app.css?v=23" />
   </head>
   <body>
     <div class="shell">
@@ -210,6 +210,42 @@
                 </span>
               </button>
             </div>
+            <div id="op-extra" class="op-extra">
+              <p class="op-extra-kicker">Дополнительно</p>
+              <button type="button" class="op-choice op-extra-item" id="open-reminders">
+                <span class="op-extra-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6.5 9.5a5.5 5.5 0 0 1 11 0c0 6 2.5 7.5 2.5 7.5H4s2.5-1.5 2.5-7.5" />
+                    <path d="M10 18.5a2 2 0 0 0 4 0" />
+                  </svg>
+                </span>
+                <span class="op-choice-text">
+                  <strong>Напоминания</strong>
+                  <span>Не забыть занести данные</span>
+                </span>
+              </button>
+              <button type="button" class="op-feedback" id="open-feedback">
+                Обратная связь
+                <span>помогите нам стать лучше</span>
+              </button>
+            </div>
+            <form id="remind-form" class="form remind-form hidden">
+              <button type="button" class="ghost op-back" id="remind-back">Назад</button>
+              <p class="op-step-title">Напоминания</p>
+              <p class="muted small">Одно время на все выбранные дни. Придёт в Telegram.</p>
+              <label class="remind-switch">
+                <input id="remind-enabled" type="checkbox" />
+                <span>Включить напоминания</span>
+              </label>
+              <div class="remind-days" id="remind-days" role="group" aria-label="Дни недели"></div>
+              <label>
+                Время
+                <input id="remind-time" type="time" required />
+              </label>
+              <p id="remind-error" class="error hidden"></p>
+              <p id="remind-ok" class="remind-ok hidden">Сохранено</p>
+              <button type="submit" class="primary">Сохранить</button>
+            </form>
             <form id="op-form" class="form hidden">
               <input id="op-kind" type="hidden" value="" />
               <button type="button" class="ghost op-back" id="op-back">Назад</button>
@@ -291,6 +327,22 @@
       </form>
     </dialog>
 
-    <script src="/app.js?v=22"></script>
+    <dialog id="feedback-dialog">
+      <form method="dialog" class="form" id="feedback-form">
+        <h2>Обратная связь</h2>
+        <p class="muted small">Помогите нам стать лучше — напишите, что улучшить.</p>
+        <label>
+          Сообщение
+          <textarea id="feedback-text" rows="5" maxlength="2000" placeholder="Что неудобно или чего не хватает" required></textarea>
+        </label>
+        <p id="feedback-error" class="error hidden"></p>
+        <div class="dialog-actions">
+          <button type="submit" class="primary" value="ok">Отправить</button>
+          <button type="button" class="ghost" id="feedback-cancel" value="cancel">Закрыть</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="/app.js?v=24"></script>
   </body>
 </html>

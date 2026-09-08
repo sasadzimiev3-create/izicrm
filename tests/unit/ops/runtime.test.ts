@@ -45,6 +45,9 @@ describe('in-flight gate', () => {
         async withTelegramIdentity<T>(): Promise<T> {
           throw new Error('should not be called');
         },
+        async withOps<T>(): Promise<T> {
+          throw new Error('should not be called');
+        },
       },
       gate,
     );
@@ -90,9 +93,9 @@ describe('shutdown', () => {
 });
 
 describe('артефакты развёртывания', () => {
-  it('ожидаемые миграции читаются с диска и включают 0016', () => {
+  it('ожидаемые миграции читаются с диска и включают 0017', () => {
     const names = expectedMigrationNames(join(ROOT, 'migrations'));
-    expect(names.at(-1)).toBe('0016_activity_backfill');
+    expect(names.at(-1)).toBe('0017_reminders');
     expect(names[0]).toBe('0001_roles_and_extensions');
   });
 

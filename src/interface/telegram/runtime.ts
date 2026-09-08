@@ -38,6 +38,7 @@ import {
   topUpMenuKeyboard,
   updatePromptKeyboard,
   webLinkKeyboard,
+  remindersKeyboard,
   type Keyboard,
   type PickerCard,
 } from './keyboards/keyboards.js';
@@ -45,9 +46,10 @@ import type { IncomingUpdate, TelegramSender } from './protocol.js';
 import { COPY } from './views/copy.js';
 import { renderArchivedList, renderFrozenCard } from './views/cards.view.js';
 import { paginateText, renderDashboard } from './views/dashboard.view.js';
+import { renderReminders } from './views/reminders.view.js';
 import type { CardRow } from '../../application/ports/card-repository.js';
 import { isStartCommand } from './handlers/start.js';
-import { isAdminCommand, tryHandleAdmin } from './handlers/admin.js';
+import { tryHandleAdmin } from './handlers/admin.js';
 
 const NOT_FOUND = COPY.notFound;
 
@@ -285,6 +287,9 @@ function isMutation(tag: Effect['t']): boolean {
     tag === 'ApplyUnfreeze' ||
     tag === 'ApplyUpdate' ||
     tag === 'ApplyArchive' ||
+    tag === 'ApplyRemindDay' ||
+    tag === 'ApplyRemindMinutes' ||
+    tag === 'ApplyRemindEnabled' ||
     tag === 'BuildReport'
   );
 }
@@ -433,6 +438,39 @@ async function classifyCallback(
       return { t: 'Cancel' };
     case 'settings':
       return { t: 'Settings' };
+    case 'remind':
+      return { t: 'Reminders' };
+    case 'rem_d': {
+      const bit = Number(id);
+      if (!Number.isInteger(bit) || bit < 0 || bit > 6) {
+        return { t: 'Reminders' };
+      }
+      return { t: 'RemindToggleDay', bit };
+    }
+    case 'rem_h': {
+      const hours = Number(id);
+      if (hours !== 1 && hours !== -1) {
+        return { t: 'Reminders' };
+      }
+      return { t: 'RemindAdjustMinutes', delta: hours * 60 };
+    }
+    case 'rem_m': {
+      const minutes = Number(id);
+      if (minutes !== 15 && minutes !== -15) {
+        return { t: 'Reminders' };
+      }
+      return { t: 'RemindAdjustMinutes', delta: minutes };
+    }
+    case 'rem_en': {
+      if (id !== '1') {
+        return { t: 'RemindSetEnabled', enabled: false };
+      }
+      const settings = await deps.services.reminder.getUserReminder(user.id);
+      if (settings.days === 0) {
+        return { t: 'RemindNeedDays' };
+      }
+      return { t: 'RemindSetEnabled', enabled: true };
+    }
     case 'web':
       return { t: 'WebCabinet' };
     case 'report':
@@ -590,6 +628,29 @@ async function runEffect(
       return;
     case 'ShowSettings':
       await send(sender, COPY.settingsTitle, settingsKeyboard(rev));
+      return;
+    case 'ShowReminders': {
+      const settings = await deps.services.reminder.getUserReminder(user.id);
+      await send(sender, renderReminders(settings, user.tz), remindersKeyboard(settings, rev));
+      return;
+    }
+    case 'RemindNeedDays': {
+      const settings = await deps.services.reminder.getUserReminder(user.id);
+      await send(
+        sender,
+        `${COPY.remindNeedDays}\n\n${renderReminders(settings, user.tz)}`,
+        remindersKeyboard(settings, rev),
+      );
+      return;
+    }
+    case 'ApplyRemindDay':
+      await deps.services.reminder.toggleUserDay(user.id, effect.bit);
+      return;
+    case 'ApplyRemindMinutes':
+      await deps.services.reminder.addUserMinutes(user.id, effect.delta);
+      return;
+    case 'ApplyRemindEnabled':
+      await deps.services.reminder.setUserEnabled(user.id, effect.enabled);
       return;
     case 'SendWebLink': {
       const url = deps.webCabinet?.issueLoginUrl(user.id, user.telegramId) ?? null;

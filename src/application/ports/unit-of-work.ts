@@ -18,4 +18,8 @@ export type DbTx = {
 export interface UnitOfWork {
   withUser<T>(userId: UserId, work: (tx: DbTx) => Promise<T>): Promise<T>;
   withTelegramIdentity<T>(telegramId: string, work: (tx: DbTx) => Promise<T>): Promise<T>;
+  /**
+   * Транзакция без user-контекста. Только вызовы SECURITY DEFINER (очередь напоминаний).
+   */
+  withOps<T>(work: (tx: DbTx) => Promise<T>): Promise<T>;
 }

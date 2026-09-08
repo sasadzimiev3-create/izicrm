@@ -29,4 +29,8 @@ export class PgUnitOfWork implements UnitOfWork {
       return work(asDbTx(trx));
     });
   }
+
+  async withOps<T>(work: (tx: DbTx) => Promise<T>): Promise<T> {
+    return this.db.transaction().execute(async (trx) => work(asDbTx(trx)));
+  }
 }

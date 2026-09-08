@@ -86,5 +86,8 @@ export function trackUnitOfWork(uow: UnitOfWork, gate: InFlightGate): UnitOfWork
     withTelegramIdentity(telegramId, work) {
       return gate.run(() => uow.withTelegramIdentity(telegramId, work));
     },
+    withOps(work) {
+      return gate.run(() => uow.withOps(work));
+    },
   };
 }

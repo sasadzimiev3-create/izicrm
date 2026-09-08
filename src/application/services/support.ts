@@ -3,6 +3,7 @@ import type { AuditLogRepository } from '../ports/audit-log-repository.js';
 import type { BalanceRepository, LocfBalance } from '../ports/balance-repository.js';
 import type { CardRepository, CardRow } from '../ports/card-repository.js';
 import type { ProcessedUpdateRepository } from '../ports/processed-update-repository.js';
+import type { ReminderRepository } from '../ports/reminder-repository.js';
 import type { ReportQueryRepository } from '../ports/report-query-repository.js';
 import type { DbTx, UnitOfWork } from '../ports/unit-of-work.js';
 import type { CardId, UserId } from '../../domain/cards/card.js';
@@ -19,6 +20,7 @@ export type ServiceDeps = {
   processed: ProcessedUpdateRepository;
   audit: AuditLogRepository;
   activity: ActivityRepository;
+  reminders: ReminderRepository;
 };
 
 export const NOT_FOUND = 'Материал не найден';

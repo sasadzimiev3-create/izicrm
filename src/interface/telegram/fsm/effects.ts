@@ -42,6 +42,11 @@ export type Effect =
   | { t: 'Stale' }
   | { t: 'Expired' }
   | { t: 'NoWorkingCards' }
+  | { t: 'ShowReminders' }
+  | { t: 'ApplyRemindDay'; bit: number }
+  | { t: 'ApplyRemindMinutes'; delta: number }
+  | { t: 'ApplyRemindEnabled'; enabled: boolean }
+  | { t: 'RemindNeedDays' }
   | { t: 'Ignore' };
 
 export type ReduceResult = {

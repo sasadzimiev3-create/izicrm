@@ -13,6 +13,7 @@ import type { Clock } from '../../config/clock.js';
 import { cardId } from '../../domain/cards/card.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../domain/errors.js';
 import { parseAmount } from '../../domain/money/parse.js';
+import { formatClock, hasDay, parseClock } from '../../application/dto/reminder.js';
 import type { AppLogger } from '../telegram/log.js';
 
 import {
@@ -42,6 +43,14 @@ const archiveSchema = z.object({
   reason: z.enum(['WITHDRAWN', 'TRANSFERRED', 'LOST']),
   targetCardId: z.number().int().positive().optional(),
 });
+const reminderSchema = z.object({
+  enabled: z.boolean(),
+  time: z.string().min(1),
+  days: z.array(z.number().int().min(0).max(6)),
+});
+const feedbackSchema = z.object({
+  message: z.string(),
+});
 
 export type WebDeps = {
   services: AppServices;
@@ -53,6 +62,7 @@ export type WebDeps = {
   publicDir: string;
   botUsername: string | null;
   quotes: QuoteSource | null;
+  notifyAdmins?: (text: string) => Promise<void>;
 };
 
 export type WebServer = {
@@ -258,6 +268,11 @@ async function handleApi(
     json(res, 200, serializeSnapshot(snapshot));
     return;
   }
+  if (method === 'GET' && pathname === '/api/reminders') {
+    const settings = await deps.services.reminder.getUserReminder(user.id);
+    json(res, 200, serializeReminder(settings));
+    return;
+  }
   if (method === 'GET' && pathname === '/api/quote/usdt-rub') {
     const quote = deps.quotes === null ? null : await deps.quotes.getUsdtRub();
     json(res, 200, {
@@ -266,6 +281,18 @@ async function handleApi(
       ask: quote?.ask ?? null,
       last: quote?.last ?? null,
     });
+    return;
+  }
+  if (method === 'PUT' && pathname === '/api/reminders') {
+    const body = await readJson(req);
+    const parsed = reminderSchema.parse(body);
+    const days = parsed.days.reduce((mask, bit) => mask | (1 << bit), 0);
+    const saved = await deps.services.reminder.saveUserReminder(user.id, {
+      enabled: parsed.enabled,
+      notifyMinute: parseClock(parsed.time),
+      days,
+    });
+    json(res, 200, serializeReminder(saved));
     return;
   }
   if (method !== 'POST') {
@@ -337,6 +364,22 @@ async function handleApi(
     json(res, 200, { ok: true });
     return;
   }
+  if (pathname === '/api/feedback') {
+    const parsed = feedbackSchema.parse(body);
+    await deps.services.reminder.submitUserFeedback(user.id, parsed.message);
+    if (deps.notifyAdmins !== undefined) {
+      try {
+        await deps.notifyAdmins(`Отзыв от ${user.telegramId}:\n${parsed.message.trim()}`);
+      } catch (error) {
+        deps.logger.error(
+          { userId: user.id, correlationId: 'feedback', err: String(error) },
+          'feedback notify failed',
+        );
+      }
+    }
+    json(res, 201, { ok: true });
+    return;
+  }
   json(res, 404, { error: 'not found' });
 }
 
@@ -395,6 +438,18 @@ function redirect(res: http.ServerResponse, location: string): void {
   res.statusCode = 302;
   res.setHeader('location', location);
   res.end();
+}
+
+function serializeReminder(settings: {
+  enabled: boolean;
+  notifyMinute: number;
+  days: number;
+}): { enabled: boolean; time: string; days: number[] } {
+  return {
+    enabled: settings.enabled,
+    time: formatClock(settings.notifyMinute),
+    days: [0, 1, 2, 3, 4, 5, 6].filter((bit) => hasDay(settings.days, bit)),
+  };
 }
 
 function sendCaught(deps: WebDeps, res: http.ServerResponse, error: unknown): void {

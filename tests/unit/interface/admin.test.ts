@@ -97,6 +97,7 @@ function makeDeps(telegramId: string, allowlist: readonly string[]): TelegramDep
     uow: {
       withUser: async (_userId, work) => work(TX),
       withTelegramIdentity: async (_id, work) => work(TX),
+      withOps: async (work) => work(TX),
     },
     users: {
       findOrCreateByTelegramId: async () => user,

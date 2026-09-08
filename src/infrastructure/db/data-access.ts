@@ -6,6 +6,7 @@ import type { BalanceRepository } from '../../application/ports/balance-reposito
 import type { CardRepository } from '../../application/ports/card-repository.js';
 import type { DialogStateRepository } from '../../application/ports/dialog-state-repository.js';
 import type { ProcessedUpdateRepository } from '../../application/ports/processed-update-repository.js';
+import type { ReminderRepository } from '../../application/ports/reminder-repository.js';
 import type { ReportQueryRepository } from '../../application/ports/report-query-repository.js';
 import type { UnitOfWork } from '../../application/ports/unit-of-work.js';
 import type { UserRepository } from '../../application/ports/user-repository.js';
@@ -18,6 +19,7 @@ import { PgBalanceRepository } from '../repositories/balance.repository.js';
 import { PgCardRepository } from '../repositories/card.repository.js';
 import { PgDialogStateRepository } from '../repositories/dialog-state.repository.js';
 import { PgProcessedUpdateRepository } from '../repositories/processed-update.repository.js';
+import { PgReminderRepository } from '../repositories/reminder.repository.js';
 import { PgReportQueryRepository } from '../repositories/report-query.repository.js';
 import { PgUserRepository } from '../repositories/user.repository.js';
 
@@ -31,6 +33,7 @@ export type DataAccess = {
   processed: ProcessedUpdateRepository;
   audit: AuditLogRepository;
   activity: ActivityRepository;
+  reminders: ReminderRepository;
 };
 
 export function createDataAccess(pool: pg.Pool): DataAccess {
@@ -45,5 +48,6 @@ export function createDataAccess(pool: pg.Pool): DataAccess {
     processed: new PgProcessedUpdateRepository(),
     audit: new PgAuditLogRepository(),
     activity: new PgActivityRepository(),
+    reminders: new PgReminderRepository(),
   };
 }

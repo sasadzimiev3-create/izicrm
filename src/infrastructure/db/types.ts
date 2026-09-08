@@ -132,6 +132,22 @@ export type WebLoginsTable = {
   logged_in_at: Generated<Timestamptz>;
 };
 
+export type RemindersTable = {
+  user_id: BigIntString;
+  enabled: boolean;
+  notify_minute: number;
+  days: number;
+  last_sent_on: IsoDate | null;
+  updated_at: Timestamptz;
+};
+
+export type UserFeedbackTable = {
+  id: Generated<BigIntString>;
+  user_id: BigIntString;
+  message: string;
+  created_at: Generated<Timestamptz>;
+};
+
 export type CurrentBalanceEntriesView = {
   id: BigIntString;
   user_id: BigIntString;
@@ -161,6 +177,8 @@ export type Database = {
   audit_log: AuditLogTable;
   user_activity_days: UserActivityDaysTable;
   web_logins: WebLoginsTable;
+  reminders: RemindersTable;
+  user_feedback: UserFeedbackTable;
   v_current_balance_entries: CurrentBalanceEntriesView;
   v_capital_flows: CapitalFlowsView;
 };

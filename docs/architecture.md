@@ -246,6 +246,11 @@ RLS на этих двух таблицах остаётся включённы�
 Функция `ops_activity_snapshot` — `SECURITY DEFINER`, без денежных колонок, `EXECUTE` только
 у приложения. Кто видит отчёт — allowlist `ADMIN_TELEGRAM_IDS`.
 
+### ADR-013. Напоминания без обхода RLS в приложении
+
+Очередь пушей смотрит всех пользователей. Функция `ops_claim_due_reminders` —
+`SECURITY DEFINER`, без сумм, помечает `last_sent_on` атомарно.
+
 ---
 
 ## 5. Сквозные сценарии

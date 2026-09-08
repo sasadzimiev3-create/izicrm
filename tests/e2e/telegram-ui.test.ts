@@ -16,7 +16,7 @@ async function createMaterial(bot: TelegramProbe, name: string, amount: string):
   await bot.send(amount);
 }
 
-describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
+describe('Telegram e2e (UI-06…UI-13, UI-15…UI-19)', () => {
   const db = useAppDb();
 
   it('UI-05: полный проход создания; на главном четыре кнопки (FR-6.2)', async () => {
@@ -339,6 +339,22 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-17)', () => {
     expect(settings).not.toContain('Переименовать');
     expect(settings).not.toContain('стикер');
     expect(settings).not.toContain('Отчёт в Excel');
+    expect(settings).toContain('Напоминания');
+  });
+
+  it('UI-19: напоминания — дни, одно время, без сумм', async () => {
+    const bot = new TelegramProbe(db.pool(), '630');
+    await insertUser(db.pool(), '630');
+    await createMaterial(bot, 'Сбер', '1000');
+    await bot.tapLabel('Настройки');
+    await bot.tapLabel('Напоминания');
+    expect(bot.last.lastText).toContain('Выключены');
+    expect(bot.last.lastText).toContain('21:00');
+    await bot.tapLabel('Пн');
+    expect(bot.last.lastText).toContain('Пн');
+    await bot.tapLabel('Включить');
+    expect(bot.last.lastText).toContain('Включены');
+    expect(bot.last.lastText).not.toMatch(/₽/);
   });
 
   it('обновление баланса вверх и вниз меняет прибыль, не депозит', async () => {

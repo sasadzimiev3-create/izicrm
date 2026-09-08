@@ -291,6 +291,12 @@ CREATE INDEX audit_log_user_idx ON audit_log (user_id, created_at DESC);
 Входы в кабинет по ссылке из бота — отдельно в `web_logins`. Агрегаты для `/admin` считает
 `ops_activity_snapshot` (`SECURITY DEFINER`, без сумм, `EXECUTE` только `izicrm_app`).
 
+### 3.9. Напоминания (`reminders`, `user_feedback`)
+
+Одно время на неделю (`notify_minute`) и битовая маска дней (пн=бит 0). Пуш забирает
+`ops_claim_due_reminders` (`SECURITY DEFINER`, без сумм). Обратная связь из кабинета —
+`user_feedback`, без денежных полей.
+
 ---
 
 ## 4. Представления
@@ -537,6 +543,7 @@ migrations/
   0014_ops_grants.sql
   0015_activity_stats.sql
   0016_activity_backfill.sql
+  0017_reminders.sql
 ```
 
 Правила: только вперёд, каждая миграция транзакционна и идемпотентна по проверкам;
@@ -568,3 +575,4 @@ migrations/
 | DB-16 | `izicrm_maintenance` не имеет `SELECT`/`DELETE` на `cards` и `balance_entries`; `DELETE` живой строки `dialog_states` (`expires_at > now()`) удаляет 0 строк |
 | DB-17 | `capital_in < 0` ⟹ ошибка CHECK; заморозка архивной карты ⟹ ошибка CHECK; `v_capital_flows` включает пополнение и не включает заморозку |
 | DB-18 | `ops_activity_snapshot` не возвращает суммы; `user_activity_days` / `web_logins` без контекста — ноль строк |
+| DB-19 | `ops_claim_due_reminders` не шлёт повторно в тот же день; чужой не видит `reminders` |

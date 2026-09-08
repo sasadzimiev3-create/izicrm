@@ -4,6 +4,7 @@ import { BalanceUpdateService } from './balance-update.service.js';
 import { CardService } from './card.service.js';
 import { DashboardService } from './dashboard.service.js';
 import { FreezeService } from './freeze.service.js';
+import { ReminderService } from './reminder.service.js';
 import { SpendService } from './spend.service.js';
 import { StatsService } from './stats.service.js';
 import { TopUpService } from './topup.service.js';
@@ -19,6 +20,7 @@ export type AppServices = {
   spend: SpendService;
   archive: ArchiveService;
   activity: ActivityService;
+  reminder: ReminderService;
 };
 
 export function createAppServices(deps: ServiceDeps): AppServices {
@@ -32,6 +34,7 @@ export function createAppServices(deps: ServiceDeps): AppServices {
     spend: new SpendService(deps),
     archive: new ArchiveService(deps),
     activity: new ActivityService(deps),
+    reminder: new ReminderService(deps),
   };
 }
 

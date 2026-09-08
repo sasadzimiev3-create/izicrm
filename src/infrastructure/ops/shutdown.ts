@@ -15,6 +15,7 @@ export type RuntimeHandles = {
   pool: pg.Pool;
   health: HealthServer;
   web?: { close(): Promise<void> };
+  reminders?: { stop(): void };
   gate: InFlightGate;
 };
 
@@ -38,6 +39,7 @@ export function bindStopSignals(bot: StoppableBot, gate: InFlightGate): void {
 }
 
 export async function finalizeRuntime(handles: RuntimeHandles): Promise<void> {
+  handles.reminders?.stop();
   handles.gate.stopAccepting();
   if (handles.bot.isRunning()) {
     await handles.bot.stop();

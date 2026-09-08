@@ -35,6 +35,7 @@ function makeDeps(): TelegramDeps {
     uow: {
       withUser: async (_userId, work) => work(TX),
       withTelegramIdentity: async (_telegramId, work) => work(TX),
+      withOps: async (work) => work(TX),
     },
     users: {
       findOrCreateByTelegramId: async () => USER,
@@ -66,6 +67,9 @@ function makeDeps(): TelegramDeps {
     services: {
       card: { getUserCard: async () => null },
       activity: { recordBotDay: async () => undefined },
+      reminder: {
+        getUserReminder: async () => ({ enabled: false, notifyMinute: 21 * 60, days: 0 }),
+      },
     } as unknown as AppServices,
     clock: createClock(() => new Date('2024-08-20T12:00:00+03:00')),
     logger: createSafeLogger(() => undefined),

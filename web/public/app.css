@@ -346,6 +346,113 @@ body {
   font-size: 12px;
 }
 
+.op-extra {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.op-extra-kicker {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.op-extra-item {
+  background: linear-gradient(180deg, #1e1b18, #161412);
+}
+
+.op-extra-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: #fdba74;
+  background: rgba(232, 93, 4, 0.12);
+  border: 1px solid rgba(232, 93, 4, 0.28);
+}
+
+.op-extra-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.op-feedback {
+  justify-self: start;
+  margin-top: 4px;
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  display: grid;
+  gap: 2px;
+}
+
+.op-feedback span {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+}
+
+.op-feedback:hover {
+  color: #fdba74;
+}
+
+.remind-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.remind-switch input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--orange);
+}
+
+.remind-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.remind-day {
+  min-width: 42px;
+  padding: 8px 0;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #0c0b0a;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.remind-day.is-on {
+  color: #111;
+  background: var(--cream);
+  border-color: var(--cream);
+}
+
+.remind-ok {
+  margin: 0;
+  color: #86efac;
+  font-size: 13px;
+}
+
 .op-back {
   justify-self: start;
   padding: 6px 12px;
@@ -1057,13 +1164,19 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   font: inherit;
   color: var(--ink);
   background: #0c0b0a;
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 10px 12px;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 96px;
 }
 
 .table-wrap {
@@ -1274,6 +1387,7 @@ dialog::backdrop {
   .ghost,
   .primary,
   .op-choice,
+  .remind-day,
   .ranges button,
   .bar > span,
   .mini,
