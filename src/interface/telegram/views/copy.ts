@@ -16,8 +16,8 @@ export const COPY = {
     'Введите название материала:\nВведите последние 4 цифры карты\n(чтобы понимать, где какая карта)',
   promptBalance: (name: string) => `${name}\nВведите текущий баланс:`,
   createHint:
-    'Эта сумма — точка отсчёта, прибылью не считается.\nПрибыль появится, когда обновите баланс.',
-  topUpMenu: 'Добавить',
+    'Эта сумма — точка отсчёта, прибылью не считается.\nПрибыль появится, когда нажмёте «Зафиксировать прибыль».',
+  topUpMenu: 'Пополнить',
   addMaterial: 'Добавить материал',
   topUpExisting: 'Пополнить материал',
   promptTopUp: (name: string, current: string) =>
@@ -40,7 +40,7 @@ export const COPY = {
     `Выведено ${delta}. Прибыль не изменилась.\n${name} · ${balance}`,
   frozenLabel: 'Заморожено',
   returnToWork: 'Вернуть в оборот',
-  updateBalance: 'Обновить баланс',
+  updateBalance: 'Зафиксировать прибыль',
   promptUpdate: (name: string, index: number, total: number, previous: string) =>
     `${name}  (${index} из ${total})\nПредыдущий баланс: ${previous}\n\nВведите текущий баланс:`,
   settingsTitle: 'Настройки',

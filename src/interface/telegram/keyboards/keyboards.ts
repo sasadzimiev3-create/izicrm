@@ -55,7 +55,7 @@ export function mainKeyboard(
     ];
   }
   const rows: Keyboard = [
-    [btn('🔄 Обновить балансы', 'upd_all', null, rev)],
+    [btn(`🔄 ${COPY.updateBalance}`, 'upd_all', null, rev)],
     [
       btn(COPY.topUpMenu, 'topup', null, rev, 'success'),
       btn(COPY.expenseMenu, 'expense', null, rev, 'danger'),

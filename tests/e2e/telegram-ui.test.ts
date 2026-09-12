@@ -34,7 +34,7 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-19)', () => {
     expect(bot.last.allTexts()).not.toContain('новый');
     expect(bot.last.allTexts()).not.toMatch(/просто прибыль|это прибыль|PROFIT/i);
     const labels = (bot.last.lastKeyboard ?? []).map((row) => row.map((button) => button.text).join());
-    expect(labels.some((text) => text.includes('Обновить балансы'))).toBe(true);
+    expect(labels.some((text) => text.includes(COPY.updateBalance))).toBe(true);
     expect(labels.some((text) => text.includes(COPY.topUpMenu))).toBe(true);
     expect(labels.some((text) => text.includes(COPY.expenseMenu))).toBe(true);
     expect(labels.some((text) => text.includes('Настройки'))).toBe(true);
@@ -84,7 +84,7 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-19)', () => {
     await bot.tapLabel(COPY.expenseMenu);
     await bot.tapLabel('Заблокировать');
     await bot.tapLabel('Гамма');
-    await bot.tapLabel('Обновить балансы');
+    await bot.tapLabel(COPY.updateBalance);
     expect(bot.last.lastText).toContain('Альфа');
     expect(bot.last.lastText).toContain('1 из 2');
     expect(bot.last.lastText).not.toContain('Гамма');
@@ -106,7 +106,7 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-19)', () => {
     expect(rows.some((row) => row.name === 'Бета' && row.amount === '2000.00')).toBe(true);
 
     await bot.send('/start');
-    await bot.tapLabel('Обновить балансы');
+    await bot.tapLabel(COPY.updateBalance);
     expect(bot.last.lastText).toContain('Введите текущий баланс');
     expect(bot.last.lastKeyboard?.flat().some((button) => button.text.includes('Пропустить'))).toBe(true);
   });
@@ -147,7 +147,7 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-19)', () => {
     const userId = await insertUser(db.pool(), '609');
     await createMaterial(bot, 'Сбер', '5000');
     const stale = encodeCallback('upd_all', null, 0);
-    await bot.tapLabel('Обновить балансы');
+    await bot.tapLabel(COPY.updateBalance);
     await bot.tap(stale);
     expect(bot.last.allTexts()).toContain(COPY.stale);
     const count = await withUser(db.pool(), userId, async (client) => {
@@ -164,7 +164,7 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-19)', () => {
     const bot = new TelegramProbe(db.pool(), '610');
     const userId = await insertUser(db.pool(), '610');
     await createMaterial(bot, 'Сбер', '1000');
-    await bot.tapLabel('Обновить балансы');
+    await bot.tapLabel(COPY.updateBalance);
     const firstId = bot.updateId;
     await bot.send('1500', firstId);
     await bot.send('9999', firstId);
@@ -205,7 +205,7 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-19)', () => {
     await insertUser(db.pool(), '612');
     await createMaterial(bot, 'Альфа', '1000');
     await createMaterial(bot, 'Бета', '2000');
-    await bot.tapLabel('Обновить балансы');
+    await bot.tapLabel(COPY.updateBalance);
     expect(bot.last.lastText).toContain('1 из 2');
     await bot.send('10.999');
     expect(bot.last.lastText).toContain('Копейки — не более двух знаков');
@@ -218,7 +218,7 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-19)', () => {
     const bot = new TelegramProbe(db.pool(), '613', () => now);
     const userId = await insertUser(db.pool(), '613');
     await createMaterial(bot, 'Сбер', '1000');
-    await bot.tapLabel('Обновить балансы');
+    await bot.tapLabel(COPY.updateBalance);
     now = new Date('2024-09-01T00:01:00+03:00');
     await bot.send('1500');
     const dates = await withUser(db.pool(), userId, async (client) => {
@@ -366,7 +366,7 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-19)', () => {
     expect(bot.last.allTexts()).toContain(COPY.totalHeader);
     expect(bot.last.allTexts()).not.toMatch(/<b>В работе:<\/b> /);
 
-    await bot.tapLabel('Обновить балансы');
+    await bot.tapLabel(COPY.updateBalance);
     await bot.send('15000');
     expect(bot.last.allTexts()).toContain(`+5${'\u202F'}000 ₽`);
     expect(bot.last.allTexts()).toContain(COPY.totalHeader);
@@ -384,7 +384,7 @@ describe('Telegram e2e (UI-06…UI-13, UI-15…UI-19)', () => {
     expect(afterUp?.capital_in).toBe('10000.00');
 
     await bot.send('/start');
-    await bot.tapLabel('Обновить балансы');
+    await bot.tapLabel(COPY.updateBalance);
     await bot.send('12000');
     expect(bot.last.allTexts()).toContain(`+2${'\u202F'}000 ₽`);
 
