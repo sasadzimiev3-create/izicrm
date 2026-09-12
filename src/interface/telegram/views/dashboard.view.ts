@@ -71,8 +71,8 @@ function dailyValue(dashboard: Dashboard): string {
 function renderCardBlock(card: DashboardCard): string {
   const title = `${bankMarkerHtml(card.name)} ${escapeHtml(card.name)}`;
   const head = `${title} ${EM_DASH} ${formatMoney(card.balance)}`;
-  const change = formatCardChange(card.change);
-  return change === '' ? head : `${head}\n${change}`;
+  const change = formatCardChange(card.allTime);
+  return change === '' ? head : `${head}\n${change} за всё время`;
 }
 
 function renderCardList(cards: DashboardCard[]): string[] {

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Silians — кабинет</title>
-    <link rel="stylesheet" href="/app.css?v=24" />
+    <link rel="stylesheet" href="/app.css?v=25" />
   </head>
   <body>
     <div class="shell">
@@ -223,6 +223,17 @@
                   <span>Не забыть занести данные</span>
                 </span>
               </button>
+              <button type="button" class="op-choice op-extra-item" id="open-archive">
+                <span class="op-extra-icon op-extra-icon-danger" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M5 7h14M9 7V5h6v2M8 7l.8 12h6.4L16 7" />
+                  </svg>
+                </span>
+                <span class="op-choice-text">
+                  <strong>Удалить материал</strong>
+                  <span>Уйдёт в архив, история сохранится</span>
+                </span>
+              </button>
               <button type="button" class="op-feedback" id="open-feedback">
                 Обратная связь
                 <span>помогите нам стать лучше</span>
@@ -267,12 +278,12 @@
                   <path d="M12 4v14M6 14l6 6 6-6" />
                 </svg>
               </div>
-              <label>
+              <label id="amount-field">
                 <span id="op-amount-label">Новый баланс</span>
                 <input id="op-amount" type="text" inputmode="decimal" placeholder="10 000" required />
               </label>
               <p id="op-error" class="error hidden"></p>
-              <button type="submit" class="primary">Записать</button>
+              <button type="submit" class="primary" id="op-submit">Записать</button>
             </form>
           </article>
           <article class="card">
@@ -342,6 +353,37 @@
       </form>
     </dialog>
 
-    <script src="/app.js?v=26"></script>
+    <dialog id="card-sheet" class="card-sheet">
+      <article class="sheet-card">
+        <header class="sheet-hero">
+          <div class="sheet-top">
+            <p class="sheet-kicker">Материал</p>
+            <button type="button" class="ghost sheet-close" id="sheet-close" aria-label="Закрыть">Закрыть</button>
+          </div>
+          <h2 id="sheet-name">—</h2>
+          <p class="sheet-balance" id="sheet-balance">—</p>
+          <div class="sheet-kpis">
+            <div>
+              <span>Сегодня</span>
+              <strong id="sheet-today">—</strong>
+            </div>
+            <div>
+              <span>За всё время</span>
+              <strong id="sheet-alltime">—</strong>
+            </div>
+            <div>
+              <span>Создан</span>
+              <strong id="sheet-created">—</strong>
+            </div>
+          </div>
+        </header>
+        <section class="sheet-body">
+          <h3>Операции</h3>
+          <ul id="sheet-journal" class="sheet-journal"></ul>
+        </section>
+      </article>
+    </dialog>
+
+    <script src="/app.js?v=27"></script>
   </body>
 </html>

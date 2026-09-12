@@ -25,6 +25,10 @@ describe('buildStatsFromLedger', () => {
     expect(stats.capitalSeries.at(-1)?.capital.toFixed()).toBe('11200.00');
     expect(stats.materials).toHaveLength(1);
     expect(stats.materials[0]?.name).toBe('Сбер');
+    expect(stats.materials[0]?.allTime.defined).toBe(true);
+    if (stats.materials[0]?.allTime.defined && stats.allTime.defined) {
+      expect(stats.materials[0].allTime.amount.toFixed()).toBe(stats.allTime.amount.toFixed());
+    }
     expect(stats.inOut.deposits.toFixed()).toBe('10000.00');
     expect(stats.inOut.withdrawals.toFixed()).toBe('0.00');
     expect(stats.inOut.depositShare).toEqual(shareOf(rub('10000'), rub('10000')));

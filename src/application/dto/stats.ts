@@ -16,6 +16,8 @@ export type StatsMaterial = {
   status: MaterialStatus;
   balance: Money;
   change: CardBalanceChange;
+  allTime: CardBalanceChange;
+  createdOn: BusinessDate;
   share: PercentResult;
 };
 

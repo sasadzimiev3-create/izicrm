@@ -11,6 +11,7 @@ export type DashboardCard = {
   icon: string | null;
   balance: Money;
   change: CardBalanceChange;
+  allTime: CardBalanceChange;
 };
 
 export type Dashboard = {

@@ -7,7 +7,7 @@ import {
   observationDates,
   type Ledger,
 } from '../../domain/finance/balance.js';
-import { cardBalanceChange } from '../../domain/finance/card-change.js';
+import { cardAllTimeChange, cardBalanceChange } from '../../domain/finance/card-change.js';
 import { capitalAsOf, frozenCapitalAsOf, workingCapitalAsOf } from '../../domain/finance/capital.js';
 import { isFrozen, isWorking } from '../../domain/finance/card-scope.js';
 import {
@@ -196,6 +196,8 @@ function toMaterial(ledger: Ledger, card: Card, today: BusinessDate, total: Mone
     status: isFrozen(card) ? 'frozen' : 'working',
     balance,
     change: cardBalanceChange(ledger, card, today),
+    allTime: cardAllTimeChange(ledger, card, today),
+    createdOn: card.createdOn,
     share: shareOf(balance, total),
   };
 }

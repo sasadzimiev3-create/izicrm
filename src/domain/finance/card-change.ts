@@ -4,6 +4,7 @@ import { Money } from '../money/money.js';
 import { balanceAsOf, indexLedger, previousUpdateDate, type Ledger } from './balance.js';
 import { isInScope } from './card-scope.js';
 import type { BusinessDate } from './period.js';
+import { allTimePnl } from './pnl.js';
 
 /**
  * Изменение баланса карты — информационная метрика, не прибыль.
@@ -45,5 +46,37 @@ export function cardBalanceChange(
     defined: true,
     amount,
     percent: percentChange(amount, previous),
+  };
+}
+
+function ledgerOfCard(ledger: Ledger, card: Card): Ledger {
+  return {
+    cards: [card],
+    entries: ledger.entries.filter((entry) => entry.cardId === card.id),
+  };
+}
+
+/**
+ * Изменение баланса карты за всё время: `allTimePnl` на леджере из одной карты.
+ * Не пользовательский P&L (A-5). Имя не `profit`.
+ *
+ * Доходность — к депозитам карты, как у общего P&L (C-15).
+ */
+export function cardAllTimeChange(
+  ledger: Ledger,
+  card: Card,
+  today: BusinessDate,
+): CardBalanceChange {
+  if (!isInScope(card, today)) {
+    return { defined: false, reason: 'NOT_IN_SCOPE' };
+  }
+  const pnl = allTimePnl(ledgerOfCard(ledger, card), today);
+  if (!pnl.defined) {
+    return { defined: false, reason: 'NO_PREVIOUS_DATA' };
+  }
+  return {
+    defined: true,
+    amount: pnl.amount,
+    percent: pnl.percent,
   };
 }

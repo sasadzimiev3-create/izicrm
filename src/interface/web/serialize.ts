@@ -172,6 +172,8 @@ export function serializeSnapshot(snapshot: StatsSnapshot): Record<string, unkno
       bank: detectBankKind(item.name),
       balance: moneyView(item.balance),
       change: changeView(item.change),
+      allTime: changeView(item.allTime),
+      createdOn: item.createdOn,
       share: shareView(item.share),
     })),
     capitalSeries: snapshot.capitalSeries.map((point) => ({

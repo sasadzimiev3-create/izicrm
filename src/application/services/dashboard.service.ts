@@ -1,6 +1,6 @@
 import type { CardRow } from '../ports/card-repository.js';
 import { balanceAsOf, lastActivityDate, type Ledger } from '../../domain/finance/balance.js';
-import { cardBalanceChange } from '../../domain/finance/card-change.js';
+import { cardAllTimeChange, cardBalanceChange } from '../../domain/finance/card-change.js';
 import { capitalAsOf, frozenCapitalAsOf, workingCapitalAsOf } from '../../domain/finance/capital.js';
 import { isFrozen, isInScope, isWorking } from '../../domain/finance/card-scope.js';
 import { monthStart, type BusinessDate } from '../../domain/finance/period.js';
@@ -30,6 +30,7 @@ function toDashboardCard(ledger: Ledger, card: CardRow, asOf: BusinessDate): Das
     icon: card.icon,
     balance: balanceAsOf(ledger, card.id, asOf) ?? Money.zero(),
     change: cardBalanceChange(ledger, card, asOf),
+    allTime: cardAllTimeChange(ledger, card, asOf),
   };
 }
 

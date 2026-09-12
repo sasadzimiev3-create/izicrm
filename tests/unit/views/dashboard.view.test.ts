@@ -25,6 +25,7 @@ function card(params: {
   icon: string | null;
   balance: string;
   change: CardBalanceChange;
+  allTime?: CardBalanceChange;
 }): DashboardCard {
   return {
     id: cardId(params.id),
@@ -32,6 +33,7 @@ function card(params: {
     icon: params.icon,
     balance: Money.from(params.balance),
     change: params.change,
+    allTime: params.allTime ?? params.change,
   };
 }
 
@@ -123,7 +125,7 @@ describe('UI-01 снимки главного экрана', () => {
     expect(text).toContain(`<u>${COPY.frozenHeader}</u>`);
     expect(text).toContain(COPY.sectionRule);
     expect(COPY.sectionRule).toHaveLength(34);
-    expect(text).toContain('+200 ₽ / +0.16%');
+    expect(text).toContain('+200 ₽ / +0.16% за всё время');
     expect(text).not.toMatch(/\[\+/);
     const lines = text.split('\n');
     const workingIdx = lines.findIndex((line) => line.includes(`<b>${COPY.workingHeader}</b>`));
@@ -369,11 +371,13 @@ describe('вёрстка строки материала', () => {
             icon: null,
             balance: '124276',
             change: { defined: false, reason: 'NEW_CARD' },
+            allTime: change('0', '124276'),
           }),
         ],
       }),
     );
     expect(text).toContain('Сбер 7121*');
+    expect(text).toContain('+0 ₽ / 0.00% за всё время');
     expect(text).not.toContain('новый');
     expect(text).not.toMatch(/Сбер 7121\*.*\nновый/s);
   });

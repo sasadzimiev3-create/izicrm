@@ -319,16 +319,20 @@ function frostTag() {
   return '<span class="frost-tag">заморожен</span>';
 }
 
+function iconDetails() {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 9h6M9 13h6M9 17h4"/></svg>';
+}
+
+function iconFix() {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>';
+}
+
 function iconSnow() {
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 3v18M5 7l14 10M5 17l14-10"/></svg>';
 }
 
 function iconUndo() {
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v5h5"/></svg>';
-}
-
-function iconTrash() {
-  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h14M9 7V5h6v2M8 7l.8 12h6.4L16 7"/></svg>';
 }
 
 function closeWatchActions() {
@@ -354,11 +358,12 @@ function renderWatch(materials) {
     el.dataset.cardId = String(item.id);
     el.tabIndex = 0;
     el.setAttribute('role', 'button');
-    const down = isDown(item.change.formatted);
+    const metric = item.allTime || item.change;
+    const down = isDown(metric.formatted);
     const bank = BANK_COLOR[item.bank] || BANK_COLOR.other;
     if (!frozen) el.style.setProperty('--bank', bank);
     el.title = frozen ? `${item.name} · заморожен` : item.name;
-    const primary = frozen
+    const third = frozen
       ? `<button type="button" class="watch-act restore" data-unfreeze="${item.id}" aria-label="Вернуть в оборот">${iconUndo()}<span>Вернуть</span></button>`
       : `<button type="button" class="watch-act frost" data-freeze="${item.id}" aria-label="Заморозить">${iconSnow()}<span>Заморозить</span></button>`;
     el.innerHTML = `
@@ -366,11 +371,13 @@ function renderWatch(materials) {
       <div class="watch-body">
         <div class="sym">${escapeHtml(item.name)}${frozen ? frostTag() : ''}</div>
         <div class="bal">${escapeHtml(item.balance.formatted)}</div>
-        <div class="chg ${down ? 'down' : 'up'}">${escapeHtml(item.change.formatted)}</div>
+        <div class="chg ${down ? 'down' : 'up'}">${escapeHtml(metric.formatted)}</div>
+        <div class="chg-cap">за всё время</div>
       </div>
       <div class="watch-actions">
-        ${primary}
-        <button type="button" class="watch-act remove" data-archive="${item.id}" aria-label="Удалить">${iconTrash()}<span>Удалить</span></button>
+        <button type="button" class="watch-act details" data-details="${item.id}" aria-label="Детали">${iconDetails()}<span>Детали</span></button>
+        <button type="button" class="watch-act fix" data-fix-card="${item.id}" aria-label="Зафиксировать прибыль">${iconFix()}<span>Зафиксировать</span></button>
+        ${third}
       </div>`;
     root.append(el);
   });
@@ -1138,6 +1145,11 @@ const OP_STEPS = {
     hint: 'Введите новый баланс после снятия, не сколько вывели. Прибыль не изменится.',
     amount: 'Новый баланс',
   },
+  archive: {
+    title: 'Удалить материал',
+    hint: 'История сохранится и останется в отчётах. Выберите материал.',
+    amount: '',
+  },
 };
 
 function showOpMenu() {
@@ -1149,6 +1161,10 @@ function showOpMenu() {
   showError('op-error', '');
   $('op-amount').value = '';
   $('op-name').value = '';
+  $('amount-field').classList.remove('hidden');
+  $('op-amount').required = true;
+  $('op-submit').textContent = 'Записать';
+  $('op-submit').className = 'primary';
   toggleBalanceShift('');
 }
 
@@ -1158,10 +1174,14 @@ function openOp(kind, cardId) {
   $('op-kind').value = kind;
   $('op-title').textContent = step.title;
   $('op-hint').textContent = step.hint;
-  $('op-amount-label').textContent = step.amount;
+  $('op-amount-label').textContent = step.amount || 'Новый баланс';
   $('name-field').classList.toggle('hidden', kind !== 'create');
   $('card-field').classList.toggle('hidden', kind === 'create');
+  $('amount-field').classList.toggle('hidden', kind === 'archive');
   $('op-name').required = kind === 'create';
+  $('op-amount').required = kind !== 'archive';
+  $('op-submit').textContent = kind === 'archive' ? 'Продолжить' : 'Записать';
+  $('op-submit').className = kind === 'archive' ? 'danger' : 'primary';
   $('op-menu').classList.add('hidden');
   $('op-extra').classList.add('hidden');
   $('op-form').classList.remove('hidden');
@@ -1170,7 +1190,7 @@ function openOp(kind, cardId) {
     $('op-card').value = String(cardId);
   }
   toggleBalanceShift(kind);
-  const focusId = kind === 'create' ? 'op-name' : 'op-amount';
+  const focusId = kind === 'create' ? 'op-name' : kind === 'archive' ? 'op-card' : 'op-amount';
   requestAnimationFrame(() => $(focusId).focus());
 }
 
@@ -1324,6 +1344,14 @@ $('open-reminders').addEventListener('click', () => {
   openReminders().catch((error) => showError('remind-error', error.message));
 });
 
+$('open-archive').addEventListener('click', () => {
+  if (liveMaterials().length === 0) {
+    alert('Пока нет материалов');
+    return;
+  }
+  openOp('archive');
+});
+
 $('remind-back').addEventListener('click', (event) => {
   event.preventDefault();
   restoreRemindControls();
@@ -1441,6 +1469,9 @@ $('op-form').addEventListener('submit', async (event) => {
         method: 'POST',
         body: JSON.stringify({ name: $('op-name').value, amount }),
       });
+    } else if (kind === 'archive') {
+      openArchive(Number($('op-card').value));
+      return;
     } else {
       const cardId = Number($('op-card').value);
       if (kind === 'update') {
@@ -1494,9 +1525,22 @@ $('journal').addEventListener('click', (event) => {
 $('watchlist').addEventListener('click', async (event) => {
   const freeze = event.target.closest('[data-freeze]');
   const unfreeze = event.target.closest('[data-unfreeze]');
-  const archive = event.target.closest('[data-archive]');
+  const details = event.target.closest('[data-details]');
+  const fixCard = event.target.closest('[data-fix-card]');
   const tile = event.target.closest('.watch');
   try {
+    if (details) {
+      event.stopPropagation();
+      openCardSheet(Number(details.dataset.details));
+      return;
+    }
+    if (fixCard) {
+      event.stopPropagation();
+      closeWatchActions();
+      switchTab('ops');
+      openOp('update', Number(fixCard.dataset.fixCard));
+      return;
+    }
     if (freeze) {
       event.stopPropagation();
       await api('/api/freeze', { method: 'POST', body: JSON.stringify({ cardId: Number(freeze.dataset.freeze) }) });
@@ -1507,11 +1551,6 @@ $('watchlist').addEventListener('click', async (event) => {
       event.stopPropagation();
       await api('/api/unfreeze', { method: 'POST', body: JSON.stringify({ cardId: Number(unfreeze.dataset.unfreeze) }) });
       await reload();
-      return;
-    }
-    if (archive) {
-      event.stopPropagation();
-      openArchive(Number(archive.dataset.archive));
       return;
     }
   } catch (error) {
@@ -1539,6 +1578,49 @@ document.addEventListener('click', (event) => {
   closeWatchActions();
 });
 
+function toneClass(formatted) {
+  return isDown(formatted) ? 'down' : 'up';
+}
+
+function openCardSheet(cardId) {
+  const item = liveMaterials().find((row) => row.id === cardId);
+  if (!item) return;
+  closeWatchActions();
+  const sheet = $('card-sheet');
+  sheet.style.setProperty('--bank', BANK_COLOR[item.bank] || BANK_COLOR.other);
+  $('sheet-name').textContent = item.name;
+  $('sheet-balance').textContent = item.balance.formatted;
+  const todayText = item.change && item.change.defined ? item.change.formatted : '—';
+  const allTime = item.allTime || item.change;
+  const allTimeText = allTime ? allTime.formatted : '—';
+  $('sheet-today').textContent = todayText;
+  $('sheet-today').className = todayText === '—' ? '' : toneClass(todayText);
+  $('sheet-alltime').textContent = allTimeText;
+  $('sheet-alltime').className = allTimeText === '—' ? '' : toneClass(allTimeText);
+  $('sheet-created').textContent = fmtDate(item.createdOn);
+  const rows = (state.data.journal || []).filter((row) => row.cardId === cardId);
+  const list = $('sheet-journal');
+  list.innerHTML = '';
+  if (rows.length === 0) {
+    list.innerHTML = '<li class="muted">Пока нет операций</li>';
+  } else {
+    rows.forEach((row) => {
+      const li = document.createElement('li');
+      const inAmt = row.capitalIn && num(row.capitalIn.amount) > 0 ? `ввод ${row.capitalIn.formatted}` : '';
+      const outAmt = row.capitalOut && num(row.capitalOut.amount) > 0 ? `вывод ${row.capitalOut.formatted}` : '';
+      const flow = [inAmt, outAmt].filter(Boolean).join(' · ');
+      const when = row.date ? fmtDate(row.date) : fmtDateTime(row.at);
+      const amount = row.amount ? row.amount.formatted : '';
+      li.innerHTML = `
+        <span class="sheet-op-title">${escapeHtml(row.sourceLabel)}</span>
+        <strong class="sheet-op-amount">${escapeHtml(amount)}</strong>
+        <span class="sheet-op-meta">${escapeHtml(when)}${flow ? ` · ${escapeHtml(flow)}` : ''}</span>`;
+      list.append(li);
+    });
+  }
+  sheet.showModal();
+}
+
 function openArchive(cardId) {
   const item = liveMaterials().find((row) => row.id === cardId);
   if (!item) return;
@@ -1561,6 +1643,11 @@ $('archive-reason').addEventListener('change', () => {
 
 $('archive-cancel').addEventListener('click', () => $('archive-dialog').close());
 
+$('sheet-close').addEventListener('click', () => $('card-sheet').close());
+$('card-sheet').addEventListener('click', (event) => {
+  if (event.target === $('card-sheet')) $('card-sheet').close();
+});
+
 $('archive-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const item = liveMaterials().find((row) => row.id === state.archiveCardId);
@@ -1576,6 +1663,9 @@ $('archive-form').addEventListener('submit', async (event) => {
   try {
     await api('/api/archive', { method: 'POST', body: JSON.stringify(payload) });
     $('archive-dialog').close();
+    const sheet = $('card-sheet');
+    if (sheet.open) sheet.close();
+    showOpMenu();
     await reload();
   } catch (error) {
     showError('archive-error', error.message);
