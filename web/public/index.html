@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Silians — кабинет</title>
-    <link rel="stylesheet" href="/app.css?v=25" />
+    <link rel="stylesheet" href="/app.css?v=26" />
   </head>
   <body>
     <div class="shell">
@@ -356,6 +356,7 @@
     <dialog id="card-sheet" class="card-sheet">
       <article class="sheet-card">
         <header class="sheet-hero">
+          <div class="sheet-handle" aria-hidden="true"></div>
           <div class="sheet-top">
             <p class="sheet-kicker">Материал</p>
             <button type="button" class="ghost sheet-close" id="sheet-close" aria-label="Закрыть">Закрыть</button>
@@ -377,6 +378,7 @@
             </div>
           </div>
         </header>
+        <nav class="sheet-actions" id="sheet-actions" aria-label="Действия с материалом"></nav>
         <section class="sheet-body">
           <h3>Операции</h3>
           <ul id="sheet-journal" class="sheet-journal"></ul>
@@ -384,6 +386,6 @@
       </article>
     </dialog>
 
-    <script src="/app.js?v=27"></script>
+    <script src="/app.js?v=28"></script>
   </body>
 </html>

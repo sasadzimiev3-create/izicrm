@@ -255,6 +255,24 @@ export function observationDates(ledger: Ledger, until?: BusinessDate): Business
 }
 
 /**
+ * Есть ли у карты актуальная запись баланса на дату `date`.
+ * LOCF соседнего дня не считается: без записи за `date` материал сегодня не обновляли.
+ */
+export function cardHasEntryOn(ledger: Ledger, cardId: CardId, date: BusinessDate): boolean {
+  return entriesInClosedRange(ledger, date, date).some((entry) => entry.cardId === cardId);
+}
+
+/**
+ * Фиксация баланса за `date`: запись без ввода/вывода.
+ * Пополнение, трата и создание (депозит) не считаются — в интерфейсе это не «сегодня».
+ */
+export function cardHasDailyUpdateOn(ledger: Ledger, cardId: CardId, date: BusinessDate): boolean {
+  return entriesInClosedRange(ledger, date, date).some(
+    (entry) => entry.cardId === cardId && entry.capitalIn.isZero() && entry.capitalOut.isZero(),
+  );
+}
+
+/**
  * Актуальные записи с `from ≤ effective_date ≤ to`, в порядке даты.
  */
 export function entriesInClosedRange(

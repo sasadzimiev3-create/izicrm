@@ -1376,6 +1376,92 @@ dialog::backdrop {
   color: #86efac;
 }
 
+.sheet-handle {
+  display: none;
+  width: 40px;
+  height: 4px;
+  margin: 0 auto 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.sheet-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 0 22px 16px;
+}
+
+.sheet-act {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: #1c1a18;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, filter 0.2s ease;
+}
+
+.sheet-act svg {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+}
+
+.sheet-act span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet-act.is-primary {
+  grid-column: 1 / -1;
+  background: linear-gradient(180deg, #f08a2a, var(--orange));
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(232, 93, 4, 0.28);
+}
+
+.sheet-act.is-frost {
+  color: #e0f2fe;
+  background: rgba(14, 116, 144, 0.28);
+  border-color: rgba(125, 211, 252, 0.22);
+}
+
+.sheet-act.is-restore {
+  color: #bbf7d0;
+  background: rgba(22, 101, 52, 0.32);
+  border-color: rgba(74, 222, 128, 0.22);
+}
+
+.sheet-act.is-danger {
+  color: #fecaca;
+  background: #3a1210;
+  border-color: rgba(248, 113, 113, 0.22);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sheet-act:hover {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+  }
+}
+
+.sheet-act:focus-visible {
+  outline: 2px solid rgba(253, 186, 116, 0.7);
+  outline-offset: 2px;
+}
+
 .sheet-body {
   padding: 0 22px 22px;
 }
@@ -1593,6 +1679,7 @@ dialog::backdrop {
   .card,
   .watch,
   .watch-act,
+  .sheet-act,
   .sheet-card,
   .watch-body,
   .watch-veil,
@@ -1641,5 +1728,64 @@ dialog::backdrop {
     min-height: 200px;
     height: 200px;
     flex: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .card-sheet[open] {
+    width: 100%;
+    max-width: 100%;
+    margin: auto 0 0;
+    border-radius: 28px 28px 0 0;
+    max-height: min(94dvh, 100%);
+  }
+
+  .sheet-handle {
+    display: block;
+  }
+
+  .sheet-hero {
+    padding: 8px 18px 14px;
+  }
+
+  .sheet-hero h2 {
+    font-size: 20px;
+  }
+
+  .sheet-balance {
+    font-size: 24px;
+  }
+
+  .sheet-kpis {
+    gap: 6px;
+    margin-top: 14px;
+  }
+
+  .sheet-kpis > div {
+    padding: 8px 10px;
+  }
+
+  .sheet-actions {
+    padding: 0 18px 14px;
+    gap: 8px;
+  }
+
+  .sheet-act {
+    min-height: 46px;
+    font-size: 12.5px;
+  }
+
+  .sheet-body {
+    padding: 0 18px 18px;
+  }
+
+  .sheet-journal {
+    max-height: min(34vh, 280px);
+  }
+}
+
+@media (max-width: 380px) {
+  .sheet-act span {
+    font-size: 12px;
   }
 }

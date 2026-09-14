@@ -71,8 +71,18 @@ function dailyValue(dashboard: Dashboard): string {
 function renderCardBlock(card: DashboardCard): string {
   const title = `${bankMarkerHtml(card.name)} ${escapeHtml(card.name)}`;
   const head = `${title} ${EM_DASH} ${formatMoney(card.balance)}`;
-  const change = formatCardChange(card.allTime);
-  return change === '' ? head : `${head}\n${change} за всё время`;
+  const lines = [head];
+  const allTime = formatCardChange(card.allTime);
+  if (allTime !== '') {
+    lines.push(allTime);
+  }
+  if (card.updatedToday) {
+    const today = formatCardChange(card.change);
+    if (today !== '' && today !== EM_DASH) {
+      lines.push(`${today} ${COPY.todayCardSuffix}`);
+    }
+  }
+  return lines.join('\n');
 }
 
 function renderCardList(cards: DashboardCard[]): string[] {

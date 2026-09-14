@@ -153,4 +153,12 @@ describe('cardAllTimeChange', () => {
       reason: 'NOT_IN_SCOPE',
     });
   });
+
+  it('в scope без записей — нет данных', () => {
+    const sber = makeCard({ id: 1, createdOn: '2024-08-01', name: 'Сбер' });
+    expect(cardAllTimeChange(makeLedger([sber], []), sber, d('2024-08-20'))).toEqual({
+      defined: false,
+      reason: 'NO_PREVIOUS_DATA',
+    });
+  });
 });

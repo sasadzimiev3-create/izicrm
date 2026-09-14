@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { cardId } from '../../../src/domain/cards/card.js';
 import {
   balanceAsOf,
+  cardHasDailyUpdateOn,
+  cardHasEntryOn,
   entriesInClosedRange,
   firstEntryDate,
   indexLedger,
@@ -141,5 +143,29 @@ describe('индекс леджера (много записей, один по�
     expect(entriesInClosedRange(ledger, d('2024-08-21'), d('2024-08-25'))).toEqual([]);
     expect(entriesInClosedRange(ledger, d('2024-08-20'), d('2024-08-10'))).toEqual([]);
     expect(entriesInClosedRange(makeLedger([], []), d('2024-08-01'), d('2024-08-31'))).toEqual([]);
+  });
+
+  it('cardHasEntryOn — только запись за этот день, не LOCF', () => {
+    const ledger = makeLedger(
+      [makeCard({ id: 1, createdOn: '2024-08-01' }), makeCard({ id: 2, createdOn: '2024-08-01' })],
+      [makeEntry(1, '2024-08-10', '1'), makeEntry(2, '2024-08-14', '2')],
+    );
+    expect(cardHasEntryOn(ledger, cardId(1), d('2024-08-10'))).toBe(true);
+    expect(cardHasEntryOn(ledger, cardId(1), d('2024-08-14'))).toBe(false);
+    expect(cardHasEntryOn(ledger, cardId(2), d('2024-08-14'))).toBe(true);
+    expect(cardHasEntryOn(ledger, cardId(2), d('2024-08-10'))).toBe(false);
+  });
+
+  it('cardHasDailyUpdateOn — только фиксация без ввода/вывода', () => {
+    const ledger = makeLedger(
+      [makeCard({ id: 1, createdOn: '2024-08-01' }), makeCard({ id: 2, createdOn: '2024-08-01' })],
+      [
+        makeEntry(1, '2024-08-14', '10500'),
+        makeEntry(2, '2024-08-14', '90000', '10000', '0'),
+      ],
+    );
+    expect(cardHasDailyUpdateOn(ledger, cardId(1), d('2024-08-14'))).toBe(true);
+    expect(cardHasDailyUpdateOn(ledger, cardId(2), d('2024-08-14'))).toBe(false);
+    expect(cardHasDailyUpdateOn(ledger, cardId(1), d('2024-08-13'))).toBe(false);
   });
 });

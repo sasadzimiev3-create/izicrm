@@ -12,6 +12,8 @@ export type DashboardCard = {
   balance: Money;
   change: CardBalanceChange;
   allTime: CardBalanceChange;
+  /** Сегодня была запись баланса, не создание материала. */
+  updatedToday: boolean;
 };
 
 export type Dashboard = {

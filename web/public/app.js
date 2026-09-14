@@ -18,6 +18,7 @@ const state = {
   range: '1M',
   tab: 'overview',
   archiveCardId: null,
+  sheetCardId: null,
   hoverCapital: null,
   hoverPnl: null,
   hoverCum: null,
@@ -333,6 +334,18 @@ function iconSnow() {
 
 function iconUndo() {
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v5h5"/></svg>';
+}
+
+function iconPlus() {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
+}
+
+function iconMinus() {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>';
+}
+
+function iconTrash() {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h14M9 7V5h6v2M8 7l.8 12h6.4L16 7"/></svg>';
 }
 
 function closeWatchActions() {
@@ -1582,10 +1595,29 @@ function toneClass(formatted) {
   return isDown(formatted) ? 'down' : 'up';
 }
 
+function sheetAct(op, className, icon, label) {
+  return `<button type="button" class="sheet-act ${className}" data-sheet-op="${op}">${icon}<span>${label}</span></button>`;
+}
+
+function renderSheetActions(item) {
+  const frozen = isFrozenMaterial(item);
+  const freeze = frozen
+    ? sheetAct('unfreeze', 'is-restore', iconUndo(), 'Вернуть')
+    : sheetAct('freeze', 'is-frost', iconSnow(), 'Заморозить');
+  $('sheet-actions').innerHTML = [
+    sheetAct('update', 'is-primary', iconFix(), 'Обновить баланс'),
+    sheetAct('topup', '', iconPlus(), 'Пополнить'),
+    sheetAct('spend', '', iconMinus(), 'Снять'),
+    freeze,
+    sheetAct('archive', 'is-danger', iconTrash(), 'Удалить'),
+  ].join('');
+}
+
 function openCardSheet(cardId) {
   const item = liveMaterials().find((row) => row.id === cardId);
   if (!item) return;
   closeWatchActions();
+  state.sheetCardId = cardId;
   const sheet = $('card-sheet');
   sheet.style.setProperty('--bank', BANK_COLOR[item.bank] || BANK_COLOR.other);
   $('sheet-name').textContent = item.name;
@@ -1598,6 +1630,7 @@ function openCardSheet(cardId) {
   $('sheet-alltime').textContent = allTimeText;
   $('sheet-alltime').className = allTimeText === '—' ? '' : toneClass(allTimeText);
   $('sheet-created').textContent = fmtDate(item.createdOn);
+  renderSheetActions(item);
   const rows = (state.data.journal || []).filter((row) => row.cardId === cardId);
   const list = $('sheet-journal');
   list.innerHTML = '';
@@ -1646,6 +1679,43 @@ $('archive-cancel').addEventListener('click', () => $('archive-dialog').close())
 $('sheet-close').addEventListener('click', () => $('card-sheet').close());
 $('card-sheet').addEventListener('click', (event) => {
   if (event.target === $('card-sheet')) $('card-sheet').close();
+});
+$('card-sheet').addEventListener('close', () => {
+  state.sheetCardId = null;
+});
+
+$('sheet-actions').addEventListener('click', async (event) => {
+  const btn = event.target.closest('[data-sheet-op]');
+  if (!btn) return;
+  const cardId = state.sheetCardId;
+  if (!cardId) return;
+  const op = btn.dataset.sheetOp;
+  try {
+    if (op === 'update' || op === 'topup' || op === 'spend') {
+      $('card-sheet').close();
+      switchTab('ops');
+      openOp(op, cardId);
+      return;
+    }
+    if (op === 'archive') {
+      $('card-sheet').close();
+      openArchive(cardId);
+      return;
+    }
+    if (op === 'freeze') {
+      await api('/api/freeze', { method: 'POST', body: JSON.stringify({ cardId }) });
+      $('card-sheet').close();
+      await reload();
+      return;
+    }
+    if (op === 'unfreeze') {
+      await api('/api/unfreeze', { method: 'POST', body: JSON.stringify({ cardId }) });
+      $('card-sheet').close();
+      await reload();
+    }
+  } catch (error) {
+    alert(error.message);
+  }
 });
 
 $('archive-form').addEventListener('submit', async (event) => {

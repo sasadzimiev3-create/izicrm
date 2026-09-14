@@ -75,6 +75,7 @@ export const COPY = {
   frozenHeader: 'Заморожено:',
   totalHeader: 'Всего:',
   todayPrefix: 'За сегодня',
+  todayCardSuffix: 'сегодня',
   sectionRule: '----------------------------------',
   totalLine: (amount: string) => `💰Всего: ${amount}`,
   workingSummary: (amount: string) => `В работе: ${amount}`,

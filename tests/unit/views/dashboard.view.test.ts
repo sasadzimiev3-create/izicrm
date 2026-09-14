@@ -26,6 +26,7 @@ function card(params: {
   balance: string;
   change: CardBalanceChange;
   allTime?: CardBalanceChange;
+  updatedToday?: boolean;
 }): DashboardCard {
   return {
     id: cardId(params.id),
@@ -34,6 +35,7 @@ function card(params: {
     balance: Money.from(params.balance),
     change: params.change,
     allTime: params.allTime ?? params.change,
+    updatedToday: params.updatedToday ?? false,
   };
 }
 
@@ -125,7 +127,8 @@ describe('UI-01 снимки главного экрана', () => {
     expect(text).toContain(`<u>${COPY.frozenHeader}</u>`);
     expect(text).toContain(COPY.sectionRule);
     expect(COPY.sectionRule).toHaveLength(34);
-    expect(text).toContain('+200 ₽ / +0.16% за всё время');
+    expect(text).toContain('+200 ₽ / +0.16%');
+    expect(text).not.toContain('за всё время');
     expect(text).not.toMatch(/\[\+/);
     const lines = text.split('\n');
     const workingIdx = lines.findIndex((line) => line.includes(`<b>${COPY.workingHeader}</b>`));
@@ -377,8 +380,45 @@ describe('вёрстка строки материала', () => {
       }),
     );
     expect(text).toContain('Сбер 7121*');
-    expect(text).toContain('+0 ₽ / 0.00% за всё время');
+    expect(text).toContain('+0 ₽ / 0.00%');
+    expect(text).not.toContain('за всё время');
+    expect(text).not.toMatch(/сегодня$/m);
     expect(text).not.toContain('новый');
     expect(text).not.toMatch(/Сбер 7121\*.*\nновый/s);
+  });
+
+  it('после обновления баланса сегодня — вторая строка с «сегодня»', () => {
+    const text = renderDashboard(
+      dashboard({
+        frozenCapital: Money.zero(),
+        frozenCards: [],
+        workingCapital: Money.from('120000'),
+        totalCapital: Money.from('120000'),
+        workingCards: [
+          card({
+            id: 1,
+            name: 'ОТП 1211',
+            icon: null,
+            balance: '120000',
+            change: change('123', '1537.50'),
+            allTime: change('50000', '70000'),
+            updatedToday: true,
+          }),
+          card({
+            id: 2,
+            name: 'Сбер 7121*',
+            icon: null,
+            balance: '0',
+            change: change('0', '1'),
+            allTime: change('10', '100'),
+          }),
+        ],
+      }),
+    );
+    expect(text).toContain('+50 000 ₽ / +71.43%');
+    expect(text).not.toContain('за всё время');
+    expect(text).toContain('+123 ₽ / +8.00% сегодня');
+    expect(text).toContain('+10 ₽ / +10.00%');
+    expect(text).not.toMatch(/\+10 ₽ \/ \+10\.00% сегодня/);
   });
 });
