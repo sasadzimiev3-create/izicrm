@@ -2,19 +2,19 @@
 set -eu
 
 # С Mac: забрать свежий pg_dump с VPS в ~/izicrm-backups (вне git).
-# Ночные дампы на сервере остаются; это второй контур на другом диске.
+# После успеха остаётся один файл izicrm-latest.dump — старые удаляются.
+# Ночные дампы на сервере свои; это второй контур на другом диске.
 
 HOST="${IZICRM_BACKUP_HOST:-root@31.76.53.4}"
 REMOTE="${IZICRM_REMOTE_DIR:-/opt/izicrm}"
 DEST="${IZICRM_BACKUP_DIR:-$HOME/izicrm-backups}"
-KEEP="${IZICRM_BACKUP_KEEP:-14}"
 
 mkdir -p "$DEST"
 chmod 700 "$DEST"
 
-STAMP=$(date -u +%Y%m%dT%H%M%SZ)
-OUT="$DEST/izicrm-${STAMP}.dump"
-TMP="$OUT.partial"
+OUT="$DEST/izicrm-latest.dump"
+TMP="$DEST/izicrm-latest.dump.partial"
+rm -f "$TMP"
 
 ssh -o BatchMode=yes -o ConnectTimeout=20 "$HOST" \
   "cd '$REMOTE' && docker compose exec -T postgres pg_dump -U postgres -d izicrm -Fc --no-owner" \
@@ -35,12 +35,8 @@ fi
 
 mv "$TMP" "$OUT"
 chmod 600 "$OUT"
-echo "backup ok: $OUT ($(wc -c < "$OUT" | tr -d ' ') bytes)"
 
-# shellcheck disable=SC2012
-old=$(ls -1t "$DEST"/izicrm-*.dump 2>/dev/null | tail -n +"$((KEEP + 1))" || true)
-if [ -n "$old" ]; then
-  echo "$old" | while IFS= read -r f; do
-    rm -f "$f"
-  done
-fi
+find "$DEST" -maxdepth 1 \( -name 'izicrm-*.dump' -o -name 'izicrm-*.dump.partial' \) \
+  ! -name 'izicrm-latest.dump' -delete
+
+echo "backup ok: $OUT ($(wc -c < "$OUT" | tr -d ' ') bytes)"

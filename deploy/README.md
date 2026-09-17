@@ -76,7 +76,8 @@ WAL из `backups/wal`, создать `recovery.signal`. Регламент п�
 ./deploy/pull-backup.sh
 ```
 
-Дамп пишется в `~/izicrm-backups/` (права `700` на каталог, `600` на файл).
+Дамп пишется в `~/izicrm-backups/izicrm-latest.dump` (каталог `700`, файл `600`).
+После успешной выгрузки остальные `izicrm-*.dump` удаляются — на диске один файл.
 LaunchAgent раз в день в 11:00, **если Mac включён**:
 
 ```bash
