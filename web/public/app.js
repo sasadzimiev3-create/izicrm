@@ -396,11 +396,19 @@ function liveMaterials() {
   return (state.data.materials || []).filter((item) => !archivedIds.has(item.id));
 }
 
+function materialOptions(materials) {
+  return materials.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('');
+}
+
 function fillCardSelects() {
-  const materials = liveMaterials();
-  const html = materials.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('');
-  $('op-card').innerHTML = html;
-  $('archive-target').innerHTML = html;
+  $('op-card').innerHTML = materialOptions(liveMaterials());
+}
+
+/** Получатели перевода — все живые материалы, кроме удаляемого: иначе выбран он сам. */
+function fillArchiveTargets(sourceId) {
+  const targets = liveMaterials().filter((row) => row.id !== sourceId);
+  $('archive-target').innerHTML = materialOptions(targets);
+  return targets.length;
 }
 
 function renderJournal() {
@@ -524,14 +532,14 @@ function drawGrid(ctx, plot, ticks, xLabels, ink, grid, step) {
   ctx.restore();
 }
 
-function xLabelsFor(points, plot, labelFn) {
+/** Подпись встаёт под свой столбец: `xAt` тот же, которым рисуются столбцы. */
+function xLabelsFor(points, labelFn, xAt) {
   if (points.length === 0) return [];
   const count = Math.min(4, points.length);
   const labels = [];
   for (let i = 0; i < count; i += 1) {
     const idx = count === 1 ? 0 : Math.round((i / (count - 1)) * (points.length - 1));
-    const x = plot.x0 + (points.length === 1 ? plot.innerW / 2 : (idx / (points.length - 1)) * plot.innerW);
-    labels.push({ x, text: labelFn(points[idx], idx) });
+    labels.push({ x: xAt(idx), text: labelFn(points[idx], idx) });
   }
   return labels;
 }
@@ -888,7 +896,7 @@ function drawPnlFrame() {
     ctx,
     plot,
     scale.ticks,
-    xLabelsFor(points, plot, (p) => p.label),
+    xLabelsFor(points, (p) => p.label, xAt),
     '#8a8680',
     'rgba(255,255,255,0.06)',
     scale.step,
@@ -1280,9 +1288,8 @@ function openArchive(cardId) {
   $('archive-target-wrap').classList.add('hidden');
   $('archive-reason').value = 'WITHDRAWN';
   showError('archive-error', '');
-  $('archive-target').querySelectorAll('option').forEach((opt) => {
-    opt.hidden = Number(opt.value) === cardId;
-  });
+  const transfer = $('archive-reason').querySelector('option[value="TRANSFERRED"]');
+  transfer.disabled = fillArchiveTargets(cardId) === 0;
   $('archive-dialog').showModal();
 }
 
