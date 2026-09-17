@@ -70,6 +70,31 @@ PITR: остановить postgres, вернуть базовый бэкап к
 WAL из `backups/wal`, создать `recovery.signal`. Регламент проверки — ежедневный
 логический restore-verify; PITR держат как второй контур.
 
+Второй контур — Mac оператора (не git). С ноутбука:
+
+```bash
+./deploy/pull-backup.sh
+```
+
+Дамп пишется в `~/izicrm-backups/` (права `700` на каталог, `600` на файл).
+LaunchAgent раз в день в 11:00, **если Mac включён**:
+
+```bash
+DEST="$HOME/izicrm-backups"
+SCRIPT="$(cd "$(dirname "$0")" && pwd)/pull-backup.sh"
+# или из корня репозитория:
+install -d "$HOME/Library/LaunchAgents" "$DEST"
+sed -e "s|__SCRIPT__|$PWD/deploy/pull-backup.sh|" \
+    -e "s|__LOG__|$DEST/pull.log|" \
+    deploy/macos/ru.izicrm.pull-backup.plist \
+  > "$HOME/Library/LaunchAgents/ru.izicrm.pull-backup.plist"
+launchctl bootout "gui/$(id -u)/ru.izicrm.pull-backup" 2>/dev/null || true
+launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/ru.izicrm.pull-backup.plist"
+```
+
+Финансовые дампы в GitHub не класть. Если Mac спит в 11:00 — запуск пропускается,
+можно дернуть `./deploy/pull-backup.sh` вручную.
+
 ## Локально
 
 ```bash
