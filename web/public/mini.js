@@ -26,6 +26,7 @@ const state = {
 const charts = {
   capitalAnim: 0,
   cumAnim: 0,
+  gaugeAnim: 0,
   capitalLayout: null,
   pnlLayout: null,
   cumLayout: null,
@@ -61,6 +62,32 @@ function bootTelegram() {
 
 function reducedMotion() {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+// Тактильный отклик Telegram. Молча пропускаем на старых клиентах.
+function haptic(kind, style) {
+  const tg = telegram();
+  const h = tg && tg.HapticFeedback;
+  if (!h) return;
+  try {
+    if (kind === 'impact') h.impactOccurred(style || 'light');
+    else if (kind === 'notify') h.notificationOccurred(style || 'success');
+    else if (kind === 'select') h.selectionChanged();
+  } catch {
+    /* старые клиенты Telegram */
+  }
+}
+
+// Ставит текст и коротко «пульсирует» при реальном изменении значения.
+function paintValue(el, text) {
+  if (!el) return;
+  const prev = el.textContent;
+  if (prev && prev !== '—' && prev !== text && !reducedMotion()) {
+    el.classList.remove('flash');
+    void el.offsetWidth;
+    el.classList.add('flash');
+  }
+  el.textContent = text;
 }
 
 function fmtDate(iso) {
@@ -294,6 +321,7 @@ function startQuotePolling() {
 }
 
 function switchTab(tab) {
+  haptic('impact', 'light');
   document.querySelectorAll('.tab').forEach((btn) => {
     btn.classList.toggle('is-active', btn.dataset.tab === tab);
   });
@@ -833,23 +861,47 @@ function drawPnlFrame() {
   });
 }
 
-function drawGauge(canvas, share) {
+function drawGauge(canvas, pct) {
   const { ctx, width, height } = sizeCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
   const cx = width / 2;
   const cy = height - 18;
   const r = Math.min(88, width / 2 - 16);
+  const frac = Math.min(1, Math.max(0, pct));
   ctx.lineWidth = 14;
   ctx.lineCap = 'round';
   ctx.beginPath();
   ctx.strokeStyle = '#2a2724';
   ctx.arc(cx, cy, r, Math.PI, 0);
   ctx.stroke();
-  const pct = share.defined ? Math.min(100, Math.max(0, num(share.value))) / 100 : 0;
+  if (frac <= 0) return;
+  const grad = ctx.createLinearGradient(cx - r, 0, cx + r, 0);
+  grad.addColorStop(0, '#16a34a');
+  grad.addColorStop(1, '#4ade80');
+  ctx.save();
   ctx.beginPath();
-  ctx.strokeStyle = '#22c55e';
-  ctx.arc(cx, cy, r, Math.PI, Math.PI + Math.PI * pct);
+  ctx.strokeStyle = grad;
+  ctx.shadowColor = 'rgba(34, 197, 94, 0.55)';
+  ctx.shadowBlur = 12;
+  ctx.arc(cx, cy, r, Math.PI, Math.PI + Math.PI * frac);
   ctx.stroke();
+  ctx.restore();
+}
+
+function animateGauge(canvas, share) {
+  cancelAnimationFrame(charts.gaugeAnim);
+  const target = share.defined ? Math.min(100, Math.max(0, num(share.value))) / 100 : 0;
+  if (reducedMotion()) {
+    drawGauge(canvas, target);
+    return;
+  }
+  const start = performance.now();
+  const tick = (now) => {
+    const t = Math.min(1, (now - start) / 640);
+    drawGauge(canvas, target * (1 - (1 - t) ** 3));
+    if (t < 1) charts.gaugeAnim = requestAnimationFrame(tick);
+  };
+  tick(start);
 }
 
 function placeTooltip(el, canvas, clientX, clientY, html) {
@@ -890,11 +942,11 @@ function renderOverview(options = {}) {
   if (!chartsOnly) {
     $('today-label').textContent = fmtDate(d.today);
     $('updated-label').textContent = d.lastUpdateDate ? `обновлено ${fmtDate(d.lastUpdateDate)}` : '';
-    $('hero-balance').textContent = d.totalCapital ? d.totalCapital.formatted : '—';
+    paintValue($('hero-balance'), d.totalCapital ? d.totalCapital.formatted : '—');
     $('hero-balance-pct').textContent = d.allTime.percent ? d.allTime.percent.formatted : '—';
     $('hero-balance-pct').className = pillClass(d.allTime.percent ? d.allTime.percent.formatted : '', false);
-    $('daily-kpi').textContent = d.daily.formatted || '—';
-    $('month-kpi').textContent = d.monthly.amount ? `${d.monthly.amount.delta} (${d.monthly.percent.formatted})` : '—';
+    paintValue($('daily-kpi'), d.daily.formatted || '—');
+    paintValue($('month-kpi'), d.monthly.amount ? `${d.monthly.amount.delta} (${d.monthly.percent.formatted})` : '—');
     $('work-share').textContent = d.workingShare.formatted;
     $('work-amount').textContent = d.workingCapital.formatted;
     $('frozen-line').textContent = d.frozenCapital.amount === '0.00' ? '' : `Заморожено ${d.frozenCapital.formatted}`;
@@ -902,7 +954,7 @@ function renderOverview(options = {}) {
     renderWatch(liveMaterials());
     renderAllocation(liveMaterials());
     renderFlows(d.flows);
-    drawGauge($('gauge'), d.workingShare);
+    animateGauge($('gauge'), d.workingShare);
   }
   applyCapitalHeader();
   applyCumHeader();
@@ -1082,6 +1134,7 @@ function bindCharts() {
       const idx = nearestByX(charts.capitalLayout, event.clientX, capital);
       if (idx < 0) return;
       const point = charts.capitalLayout.points[idx];
+      if (!state.hoverCapital || state.hoverCapital.date !== point.date) haptic('select');
       state.hoverCapital = point;
       applyCapitalHeader();
       drawCapitalFrame(1);
@@ -1100,6 +1153,7 @@ function bindCharts() {
       const idx = nearestByX(charts.cumLayout, event.clientX, cum);
       if (idx < 0) return;
       const point = charts.cumLayout.points[idx];
+      if (!state.hoverCum || state.hoverCum.date !== point.date) haptic('select');
       state.hoverCum = point;
       applyCumHeader();
       drawCumFrame(1);
@@ -1118,6 +1172,7 @@ function bindCharts() {
       const idx = nearestByX(charts.pnlLayout, event.clientX, pnl);
       if (idx < 0) return;
       const point = charts.pnlLayout.points[idx];
+      if (!state.hoverPnl || state.hoverPnl.date !== point.date) haptic('select');
       state.hoverPnl = point;
       drawPnlFrame();
       const pct = point.percent && point.percent.formatted ? point.percent.formatted : '—';
@@ -1135,6 +1190,7 @@ function bindUi() {
   $('op-menu').addEventListener('click', (event) => {
     const btn = event.target.closest('button[data-kind]');
     if (!btn) return;
+    haptic('impact', 'light');
     openOp(btn.dataset.kind);
   });
   $('op-back').addEventListener('click', () => showOpMenu());
@@ -1161,7 +1217,9 @@ function bindUi() {
       $('op-name').value = '';
       showOpMenu();
       await reload();
+      haptic('notify', 'success');
     } catch (error) {
+      haptic('notify', 'error');
       showError('op-error', error.message);
     } finally {
       $('op-submit').disabled = false;
@@ -1173,6 +1231,7 @@ function bindUi() {
   $('ranges').addEventListener('click', (event) => {
     const btn = event.target.closest('button[data-range]');
     if (!btn) return;
+    if (btn.dataset.range !== state.range) haptic('select');
     state.range = btn.dataset.range;
     state.hoverCapital = null;
     state.hoverPnl = null;
@@ -1192,6 +1251,7 @@ function bindUi() {
   $('watchlist').addEventListener('click', (event) => {
     const tile = event.target.closest('.material');
     if (!tile) return;
+    haptic('impact', 'light');
     openSheet(Number(tile.dataset.cardId));
   });
   $('sheet-backdrop').addEventListener('click', () => closeSheet());
@@ -1207,7 +1267,9 @@ function bindUi() {
       await api(path, { method: 'POST', body: JSON.stringify({ cardId: id }) });
       closeSheet();
       await reload();
+      haptic('notify', 'success');
     } catch (error) {
+      haptic('notify', 'error');
       showError('sheet-error', error.message);
     } finally {
       $('sheet-primary').disabled = false;
@@ -1234,7 +1296,9 @@ function bindUi() {
       await api('/api/archive', { method: 'POST', body: JSON.stringify(payload) });
       closeArchive();
       await reload();
+      haptic('notify', 'success');
     } catch (error) {
+      haptic('notify', 'error');
       showError('archive-error', error.message);
     } finally {
       $('archive-submit').disabled = false;

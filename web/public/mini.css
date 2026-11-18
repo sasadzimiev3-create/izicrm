@@ -389,6 +389,101 @@ input, select {
 .sheet-btn { width: 100%; }
 .dialog-actions { display: grid; gap: 8px; }
 
+/* ---------- Движение и микровзаимодействия ---------- */
+
+.primary, .danger, .ghost, .sheet-btn, .op-choice, .material, .op-back,
+.tab, .ranges button, .linkish, .rate-chip, .top-meta {
+  transition:
+    transform 0.15s cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.primary:active, .danger:active, .ghost:active, .sheet-btn:active,
+.op-choice:active, .material:active, .linkish:active,
+.rate-chip:active, .op-back:active { transform: scale(0.972); }
+.tab:active, .ranges button:active { transform: scale(0.92); }
+
+.primary {
+  background: linear-gradient(180deg, #fb7a1f, var(--orange));
+  box-shadow: 0 10px 26px rgba(232, 93, 4, 0.34);
+}
+.primary:active { box-shadow: 0 4px 14px rgba(232, 93, 4, 0.3); }
+.primary:disabled, .sheet-btn:disabled { opacity: 0.6; }
+
+.op-choice:active { border-color: var(--orange); }
+.op-choice:active .op-num { background: var(--orange); color: #fff; }
+.op-num { transition: background-color 0.2s ease, color 0.2s ease; }
+.material:active { box-shadow: inset 3px 0 0 var(--bank, #a8a29e), 0 0 0 1px var(--line); }
+
+.pill { transition: background-color 0.25s ease, color 0.25s ease; }
+.rate-leg strong { transition: color 0.2s ease; }
+
+/* Индикатор активной вкладки */
+.tabbar .tab { position: relative; }
+.tabbar .tab::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 9px;
+  width: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--orange);
+  transform: translateX(-50%);
+  transition: width 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.tabbar .tab.is-active::after { width: 24px; }
+
+.ranges button.is-active { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22); }
+
+/* Появление и отклики */
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sheet-rise {
+  from { opacity: 0; transform: translateY(26px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pop { 0% { transform: scale(1); } 42% { transform: scale(1.07); } 100% { transform: scale(1); } }
+@keyframes tick-in { from { transform: scaleY(0.25); opacity: 0.2; } to { transform: scaleY(1); opacity: 1; } }
+
+.stack:not(.hidden) > .card { animation: rise 0.44s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.stack > .card:nth-child(2) { animation-delay: 0.05s; }
+.stack > .card:nth-child(3) { animation-delay: 0.1s; }
+.stack > .card:nth-child(4) { animation-delay: 0.15s; }
+.stack > .card:nth-child(5) { animation-delay: 0.2s; }
+.stack > .card:nth-child(6) { animation-delay: 0.24s; }
+.stack > .card:nth-child(7) { animation-delay: 0.28s; }
+.stack > .card:nth-child(n + 8) { animation-delay: 0.32s; }
+
+.material, .flow-list li { animation: rise 0.34s ease both; }
+.material:nth-child(2) { animation-delay: 0.05s; }
+.material:nth-child(3) { animation-delay: 0.1s; }
+.material:nth-child(4) { animation-delay: 0.15s; }
+.material:nth-child(n + 5) { animation-delay: 0.19s; }
+
+.ticks i.on { transform-origin: bottom; animation: tick-in 0.32s ease both; }
+.ticks i.on:nth-child(odd) { animation-delay: 0.04s; }
+
+.sheet:not(.hidden) .sheet-backdrop { animation: fade 0.22s ease both; }
+.sheet:not(.hidden) .sheet-panel { animation: sheet-rise 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+.logo-mark {
+  box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  transition: box-shadow 0.3s ease;
+}
+.brand:active .logo-mark { box-shadow: 0 0 14px 1px rgba(34, 197, 94, 0.45); }
+
+.flash { animation: pop 0.42s ease; }
+
 @media (prefers-reduced-motion: reduce) {
   .bar > span { transition: none; }
+  .stack > .card, .material, .flow-list li, .ticks i.on, .flash,
+  .sheet:not(.hidden) .sheet-backdrop,
+  .sheet:not(.hidden) .sheet-panel { animation: none !important; }
+  .primary:active, .danger:active, .ghost:active, .sheet-btn:active,
+  .op-choice:active, .material:active, .linkish:active, .rate-chip:active,
+  .op-back:active, .tab:active, .ranges button:active { transform: none; }
 }
