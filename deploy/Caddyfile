@@ -1,0 +1,7 @@
+# Бесплатное имя само указывает на 31.76.53.4. Аккаунт не нужен.
+# Если Let's Encrypt откажет sslip.io, смените MINIAPP_HOST на имя DuckDNS
+# и направьте его A-записью на этот же IP. Код Mini App от имени не зависит.
+# Caddy сам ставит X-Forwarded-Proto: https. Порт 3000 по-прежнему отдаёт кабинет.
+{$MINIAPP_HOST:31.76.53.4.sslip.io} {
+	reverse_proxy bot:3000
+}

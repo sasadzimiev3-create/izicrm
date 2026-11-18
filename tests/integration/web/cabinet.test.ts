@@ -1,3 +1,5 @@
+import { createHmac } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
 
 import { parseUserId } from '../../../src/infrastructure/db/ids.js';
@@ -253,7 +255,123 @@ describe('веб-кабинет и изоляция', () => {
       await empty.close();
     }
   });
+
+  it('Mini App: своя сессия по initData, чужой снимок пустой, подделка не входит', async () => {
+    const pool = db.pool();
+    const access = createDataAccess(pool);
+    const services = createAppServices(access);
+    const botToken = '123:mini';
+    const now = new Date('2024-08-20T12:00:00+03:00');
+    const auth = createWebAuth({
+      secret: 'cabinet-secret',
+      publicUrl: 'http://127.0.0.1',
+      botToken,
+      nowFn: () => now,
+    });
+    const ownerTg = '88021';
+    const strangerTg = '88022';
+    await insertUser(pool, ownerTg);
+    await insertUser(pool, strangerTg);
+    const authDate = Math.floor(now.getTime() / 1000);
+
+    const web = await startWebServer(
+      {
+        services,
+        uow: access.uow,
+        users: access.users,
+        clock: createClock(() => now),
+        logger: createSafeLogger(() => undefined),
+        auth,
+        publicDir: defaultPublicDir(),
+        botUsername: null,
+        quotes: null,
+      },
+      { host: '127.0.0.1', port: 0 },
+    );
+
+    try {
+      const base = `http://127.0.0.1:${String(web.port)}`;
+      const page = await fetch(`${base}/app`);
+      expect(page.status).toBe(200);
+      expect(await page.text()).toContain('Откройте из Telegram');
+
+      const forged = await fetch(`${base}/api/auth/webapp`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ initData: signWebApp(botToken, ownerTg, authDate).replace(/hash=[0-9a-f]+/u, 'hash=00') }),
+      });
+      expect(forged.status).toBe(401);
+
+      const ownerCookie = await webappLogin(base, signWebApp(botToken, ownerTg, authDate), false);
+      const created = await fetch(`${base}/api/cards`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: ownerCookie },
+        body: JSON.stringify({ name: 'Сбер 3333', amount: '15000' }),
+      });
+      expect(created.status).toBe(201);
+      const ownerView = (await (await fetch(`${base}/api/overview`, { headers: { cookie: ownerCookie } })).json()) as {
+        journal: unknown[];
+        totalCapital: { amount: string };
+      };
+      expect(ownerView.totalCapital.amount).toBe('15000.00');
+      expect(ownerView.journal).toHaveLength(1);
+
+      const strangerCookie = await webappLogin(base, signWebApp(botToken, strangerTg, authDate), true);
+      const strangerView = (await (await fetch(`${base}/api/overview`, { headers: { cookie: strangerCookie } })).json()) as {
+        journal: unknown[];
+        totalCapital: { amount: string };
+      };
+      expect(strangerView.journal).toHaveLength(0);
+      expect(strangerView.totalCapital.amount).toBe('0.00');
+    } finally {
+      await web.close();
+    }
+  });
 });
+
+function signWebApp(botToken: string, telegramId: string, authDate: number): string {
+  const params = new URLSearchParams();
+  params.set('auth_date', String(authDate));
+  params.set('query_id', 'AAE');
+  params.set('user', JSON.stringify({ id: Number(telegramId), first_name: 'Ann' }));
+  const check = [...params.entries()]
+    .sort((left, right) => {
+      if (left[0] < right[0]) {
+        return -1;
+      }
+      if (left[0] > right[0]) {
+        return 1;
+      }
+      return 0;
+    })
+    .map(([key, value]) => `${key}=${value}`)
+    .join('\n');
+  const secretKey = createHmac('sha256', 'WebAppData').update(botToken).digest();
+  params.set('hash', createHmac('sha256', secretKey).update(check).digest('hex'));
+  return params.toString();
+}
+
+async function webappLogin(base: string, initData: string, secure: boolean): Promise<string> {
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (secure) {
+    headers['x-forwarded-proto'] = 'https';
+  }
+  const res = await fetch(`${base}/api/auth/webapp`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ initData }),
+  });
+  expect(res.status).toBe(204);
+  const setCookie = res.headers.get('set-cookie') ?? '';
+  if (secure) {
+    expect(setCookie).toContain('Secure');
+  } else {
+    expect(setCookie).not.toContain('Secure');
+  }
+  const pair = setCookie.split(';')[0];
+  expect(pair).toBeTruthy();
+  return pair ?? '';
+}
 
 async function login(
   base: string,

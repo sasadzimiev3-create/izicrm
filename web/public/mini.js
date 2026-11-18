@@ -1,0 +1,1293 @@
+// Суммы с сервера остаются строками. Number — только чтобы поставить пиксель на canvas.
+const BANK_COLOR = {
+  sber: '#22c55e',
+  vtb: '#3b82f6',
+  alfa: '#e10f04',
+  otp: '#fe9e0a',
+  tbank: '#facc15',
+  other: '#a8a29e',
+};
+
+const WINDOW_LOOKBACK = { '1W': 6, '1M': 29, '3M': 89, '1Y': 364 };
+const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+const NARROW = '\u202F';
+const QUOTE_MS = 15_000;
+
+const state = {
+  data: null,
+  range: '1M',
+  archiveCardId: null,
+  sheetCardId: null,
+  hoverCapital: null,
+  hoverPnl: null,
+  hoverCum: null,
+};
+
+const charts = {
+  capitalAnim: 0,
+  cumAnim: 0,
+  capitalLayout: null,
+  pnlLayout: null,
+  cumLayout: null,
+};
+
+let initData = '';
+let authRetried = false;
+let backBound = false;
+
+const $ = (id) => document.getElementById(id);
+
+function telegram() {
+  return window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+}
+
+function bootTelegram() {
+  const tg = telegram();
+  if (!tg) return '';
+  const call = (name, ...args) => {
+    try {
+      if (typeof tg[name] === 'function') tg[name](...args);
+    } catch {
+      /* старые клиенты Telegram */
+    }
+  };
+  call('ready');
+  call('expand');
+  call('disableVerticalSwipes');
+  call('setHeaderColor', '#030303');
+  call('setBackgroundColor', '#030303');
+  return typeof tg.initData === 'string' ? tg.initData : '';
+}
+
+function reducedMotion() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const [y, m, d] = iso.split('-');
+  return `${d}.${m}.${y}`;
+}
+
+function fmtDateTime(iso) {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  const day = date.toLocaleDateString('ru-RU');
+  const time = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  return `${day} ${time}`;
+}
+
+function fmtDateShort(iso) {
+  if (!iso) return '';
+  const [, m, d] = iso.split('-');
+  return `${d}.${m}`;
+}
+
+function isDown(formatted) {
+  return String(formatted).includes('−') || String(formatted).startsWith('-');
+}
+
+function pillClass(formatted, light) {
+  const down = isDown(formatted);
+  return `pill${light ? ' light' : ''}${down ? ' down' : ''}`;
+}
+
+function num(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function moneyToKopecks(amountStr) {
+  const text = String(amountStr ?? '0');
+  const neg = text.startsWith('-');
+  const raw = neg ? text.slice(1) : text;
+  const [intPart = '0', frac = '00'] = raw.split('.');
+  const k = BigInt(intPart || '0') * 100n + BigInt((frac + '00').slice(0, 2));
+  return neg ? -k : k;
+}
+
+function kopecksToDelta(k) {
+  const neg = k < 0n;
+  const abs = neg ? -k : k;
+  const intPart = abs / 100n;
+  const frac = abs % 100n;
+  const grouped = intPart.toString().replace(/\B(?=(\d{3})+(?!\d))/g, NARROW);
+  const body = frac === 0n ? `${grouped} ₽` : `${grouped},${frac.toString().padStart(2, '0')} ₽`;
+  if (k === 0n) return `+${body}`;
+  return `${neg ? '−' : '+'}${body}`;
+}
+
+function fmtAxisMoney(value, step) {
+  const n = Math.round(value);
+  const abs = Math.abs(n);
+  const sign = n < 0 ? '−' : '';
+  if (step >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1)}${NARROW}млн`;
+  if (step >= 1000) return `${sign}${Math.round(abs / 1000)}${NARROW}тыс`;
+  return `${sign}${abs.toLocaleString('ru-RU')}`;
+}
+
+function addDaysIso(iso, days) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getUTCDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
+function rangeFrom(today, range) {
+  if (range === 'All') return null;
+  return addDaysIso(today, -WINDOW_LOOKBACK[range]);
+}
+
+function utcStamp(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return Date.UTC(y, m - 1, d);
+}
+
+function daysBetweenIso(from, to) {
+  return Math.round((utcStamp(to) - utcStamp(from)) / 86400000);
+}
+
+function viewRange(today, range, series) {
+  const to = today;
+  if (range === 'All') {
+    const first = series && series.length > 0 ? series[0].date : today;
+    return { from: first, to };
+  }
+  return { from: rangeFrom(today, range), to };
+}
+
+function plotView(today, range, series) {
+  const view = viewRange(today, range, series);
+  const visible = filterByDate(series, range, today);
+  if (visible.length === 0) return view;
+  return { from: visible[0].date, to: view.to };
+}
+
+function xAtDate(date, from, to, plot) {
+  const span = Math.max(1, daysBetweenIso(from, to));
+  const t = Math.min(1, Math.max(0, daysBetweenIso(from, date) / span));
+  return plot.x0 + t * plot.innerW;
+}
+
+function fmtAxisDate(iso, spanDays) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  if (spanDays >= 90) return `${MONTHS[Number(m) - 1]} ${String(y).slice(2)}`;
+  return `${d}.${m}`;
+}
+
+function timeAxisLabels(from, to, plot) {
+  const span = Math.max(0, daysBetweenIso(from, to));
+  const count = span < 3 ? 2 : 4;
+  const labels = [];
+  const seen = new Set();
+  for (let i = 0; i < count; i += 1) {
+    const date = addDaysIso(from, Math.round((i / Math.max(1, count - 1)) * span));
+    if (seen.has(date)) continue;
+    seen.add(date);
+    labels.push({ x: xAtDate(date, from, to, plot), text: fmtAxisDate(date, span) });
+  }
+  return labels;
+}
+
+function filterByDate(series, range, today, dateKey = 'date') {
+  if (!series || series.length === 0) return [];
+  if (range === 'All') return series.slice();
+  const from = rangeFrom(today, range);
+  return series.filter((point) => point[dateKey] >= from && point[dateKey] <= today);
+}
+
+function filterMonths(series, range, today) {
+  if (!series || series.length === 0) return [];
+  if (range === 'All') return series.slice();
+  const from = rangeFrom(today, range);
+  const fromKey = from.slice(0, 7);
+  const toKey = today.slice(0, 7);
+  return series.filter((point) => {
+    const key = `${point.year}-${String(point.month).padStart(2, '0')}`;
+    return key >= fromKey && key <= toKey;
+  });
+}
+
+function downsample(points, max) {
+  if (points.length <= max) return points;
+  const out = [];
+  const last = points.length - 1;
+  for (let i = 0; i < max; i += 1) {
+    const idx = Math.round((i / (max - 1)) * last);
+    if (out.length === 0 || out[out.length - 1] !== points[idx]) out.push(points[idx]);
+  }
+  return out;
+}
+
+async function request(path, options) {
+  const res = await fetch(path, {
+    credentials: 'same-origin',
+    ...options,
+    headers: { 'content-type': 'application/json', ...(options && options.headers) },
+  });
+  if (res.status === 204) return null;
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const error = new Error(body.error || 'Ошибка запроса');
+    error.status = res.status;
+    throw error;
+  }
+  return body;
+}
+
+async function api(path, options) {
+  try {
+    return await request(path, options);
+  } catch (error) {
+    if (error.status !== 401 || authRetried || path === '/api/auth/webapp' || initData === '') throw error;
+    authRetried = true;
+    await request('/api/auth/webapp', { method: 'POST', body: JSON.stringify({ initData }) });
+    return request(path, options);
+  }
+}
+
+function formatRate(value) {
+  if (value == null || value === '') return '—';
+  const [intPart = '0', frac = '00'] = String(value).split('.');
+  return `${intPart},${(frac + '00').slice(0, 2)}`;
+}
+
+function paintQuote(data) {
+  const buy = $('usdt-buy');
+  const sell = $('usdt-sell');
+  const link = $('usdt-rate');
+  if (!buy || !sell) return;
+  const ok = data && data.ask != null && data.bid != null;
+  buy.textContent = ok ? formatRate(data.ask) : '—';
+  sell.textContent = ok ? formatRate(data.bid) : '—';
+  if (link && data && data.href) link.href = data.href;
+}
+
+async function refreshQuote() {
+  if (refreshQuote.busy) return;
+  refreshQuote.busy = true;
+  try {
+    const res = await fetch('/api/quote/usdt-rub', { credentials: 'same-origin' });
+    const body = await res.json().catch(() => ({}));
+    paintQuote(res.ok ? body : null);
+  } catch {
+    paintQuote(null);
+  } finally {
+    refreshQuote.busy = false;
+  }
+}
+
+function startQuotePolling() {
+  void refreshQuote();
+  setInterval(() => {
+    if (document.visibilityState === 'hidden') return;
+    void refreshQuote();
+  }, QUOTE_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void refreshQuote();
+  });
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((btn) => {
+    btn.classList.toggle('is-active', btn.dataset.tab === tab);
+  });
+  $('panel-overview').classList.toggle('hidden', tab !== 'overview');
+  $('panel-ops').classList.toggle('hidden', tab !== 'ops');
+  if (tab === 'overview' && state.data) {
+    requestAnimationFrame(() => requestAnimationFrame(() => renderOverview({ animate: true })));
+  }
+}
+
+function renderTicks(share) {
+  const root = $('work-ticks');
+  root.innerHTML = '';
+  const value = share.defined ? num(share.value) : 0;
+  for (let i = 0; i < 16; i += 1) {
+    const mark = document.createElement('i');
+    if (i < Math.round((value / 100) * 16)) mark.className = 'on';
+    root.append(mark);
+  }
+}
+
+function renderWatch(materials) {
+  const root = $('watchlist');
+  const count = $('watch-count');
+  root.innerHTML = '';
+  if (count) count.textContent = materials.length === 0 ? '' : String(materials.length);
+  if (materials.length === 0) {
+    root.innerHTML = '<p class="muted">Пока нет материалов</p>';
+    return;
+  }
+  materials.forEach((item) => {
+    const frozen = item.status === 'frozen';
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = frozen ? 'material is-frozen' : 'material';
+    el.dataset.cardId = String(item.id);
+    const down = isDown(item.change.formatted);
+    const bank = BANK_COLOR[item.bank] || BANK_COLOR.other;
+    if (!frozen) el.style.setProperty('--bank', bank);
+    el.innerHTML = `
+      <span class="sym">${escapeHtml(item.name)}${frozen ? '<span class="frost-tag">заморожен</span>' : ''}</span>
+      <span class="bal">${escapeHtml(item.balance.formatted)}</span>
+      <span class="chg ${down ? 'down' : 'up'}">${escapeHtml(item.change.formatted)}</span>`;
+    root.append(el);
+  });
+}
+
+function renderAllocation(materials) {
+  const root = $('allocation');
+  root.innerHTML = '';
+  if (materials.length === 0) {
+    root.innerHTML = '<p class="muted">Пока нет материалов</p>';
+    return;
+  }
+  materials.forEach((item) => {
+    const frozen = item.status === 'frozen';
+    const pct = item.share.defined ? num(item.share.value) : 0;
+    const row = document.createElement('div');
+    row.className = frozen ? 'alloc-row is-frozen' : 'alloc-row';
+    const width = `${Math.min(100, Math.max(0, pct))}%`;
+    const barColor = frozen ? '#38bdf8' : BANK_COLOR[item.bank] || BANK_COLOR.other;
+    row.innerHTML = `
+      <span>${escapeHtml(item.name)}</span>
+      <div class="bar"><span style="width:0;background:${barColor}"></span></div>
+      <span>${escapeHtml(item.share.formatted)}</span>`;
+    root.append(row);
+    requestAnimationFrame(() => {
+      const bar = row.querySelector('.bar > span');
+      if (bar) bar.style.width = width;
+    });
+  });
+}
+
+function renderFlows(flows) {
+  const root = $('flows');
+  root.innerHTML = '';
+  const rows = (flows || []).slice(0, 8);
+  if (rows.length === 0) {
+    root.innerHTML = '<li class="muted">Движений пока нет</li>';
+    return;
+  }
+  rows.forEach((row) => {
+    const li = document.createElement('li');
+    const out = row.kind === 'WITHDRAWAL';
+    li.innerHTML = `<span>${escapeHtml(fmtDate(row.date))} · ${escapeHtml(row.cardName)} · ${escapeHtml(row.kindLabel)}</span><strong class="${out ? 'down' : 'up'}">${escapeHtml(row.amount.formatted)}</strong>`;
+    root.append(li);
+  });
+}
+
+function liveMaterials() {
+  const archivedIds = new Set((state.data.archived || []).map((row) => row.id));
+  return (state.data.materials || []).filter((item) => !archivedIds.has(item.id));
+}
+
+function fillCardSelects() {
+  const materials = liveMaterials();
+  const html = materials.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('');
+  $('op-card').innerHTML = html;
+  $('archive-target').innerHTML = html;
+}
+
+function renderJournal() {
+  const body = $('journal');
+  body.innerHTML = '';
+  const activeIds = new Set(liveMaterials().map((item) => item.id));
+  const rows = state.data.journal || [];
+  if (rows.length === 0) {
+    body.innerHTML = '<p class="muted">Пока нет действий</p>';
+    return;
+  }
+  rows.forEach((row) => {
+    const card = document.createElement('article');
+    card.className =
+      row.kind === 'FREEZE'
+        ? 'journal-card is-freeze'
+        : row.kind === 'UNFREEZE'
+          ? 'journal-card is-unfreeze'
+          : row.kind === 'ARCHIVE'
+            ? 'journal-card is-archive'
+            : 'journal-card';
+    const inAmt = row.capitalIn && num(row.capitalIn.amount) > 0 ? `+ ${row.capitalIn.formatted}` : '';
+    const outAmt = row.capitalOut && num(row.capitalOut.amount) > 0 ? `− ${row.capitalOut.formatted}` : '';
+    const flow = inAmt || outAmt || '—';
+    const amount = row.amount ? row.amount.formatted : '—';
+    const canFix = Boolean(row.canFix) && activeIds.has(row.cardId);
+    card.innerHTML = `
+      <div class="journal-top"><strong>${escapeHtml(row.cardName)}</strong><span>${escapeHtml(fmtDateTime(row.at))}</span></div>
+      <div>${escapeHtml(row.sourceLabel)}</div>
+      <div class="journal-meta">${escapeHtml(amount)} · ${escapeHtml(flow)}</div>
+      ${canFix ? `<button type="button" class="linkish" data-fix="${row.cardId}">Исправить</button>` : ''}`;
+    body.append(card);
+  });
+}
+
+function renderArchive() {
+  const arch = $('archive-list');
+  arch.innerHTML = '';
+  const archived = state.data.archived || [];
+  if (archived.length === 0) {
+    arch.innerHTML = '<li class="muted">Архив пуст</li>';
+    return;
+  }
+  archived.forEach((row) => {
+    const li = document.createElement('li');
+    const reason = row.reasonLabel || row.reason;
+    li.innerHTML = `<span>${escapeHtml(row.name)} · ${escapeHtml(fmtDate(row.archivedOn))}</span><span>${escapeHtml(reason)}</span>`;
+    arch.append(li);
+  });
+}
+
+function sizeCanvas(canvas) {
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const width = Math.max(1, Math.round(canvas.clientWidth || 320));
+  const height = Math.max(1, Math.round(canvas.clientHeight || 180));
+  const bitmapW = Math.round(width * dpr);
+  const bitmapH = Math.round(height * dpr);
+  if (canvas.width !== bitmapW) canvas.width = bitmapW;
+  if (canvas.height !== bitmapH) canvas.height = bitmapH;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, width, height };
+}
+
+function niceTicks(min, max, count) {
+  if (min === max) {
+    const pad = Math.max(100, Math.abs(min) * 0.04);
+    min -= pad;
+    max += pad;
+  }
+  const span = max - min;
+  const raw = span / count;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const norm = raw / mag;
+  const step = (norm >= 5 ? 5 : norm >= 2 ? 2 : 1) * mag;
+  const start = Math.floor(min / step) * step;
+  const ticks = [];
+  for (let v = start; v <= max + step / 2; v += step) ticks.push(v);
+  return { min: start, max: ticks[ticks.length - 1] ?? max, ticks, step };
+}
+
+function layoutPlot(width, height, pad) {
+  return {
+    x0: pad.left,
+    y0: pad.top,
+    x1: width - pad.right,
+    y1: height - pad.bottom,
+    innerW: width - pad.left - pad.right,
+    innerH: height - pad.top - pad.bottom,
+  };
+}
+
+function drawGrid(ctx, plot, ticks, xLabels, ink, grid, step) {
+  ctx.save();
+  ctx.font = '11px "Segoe UI", system-ui, sans-serif';
+  ctx.fillStyle = ink;
+  ctx.strokeStyle = grid;
+  ctx.lineWidth = 1;
+  ticks.forEach((tick) => {
+    const y = plot.y0 + ((plot.max - tick) / (plot.max - plot.min)) * plot.innerH;
+    ctx.beginPath();
+    ctx.moveTo(plot.x0, y);
+    ctx.lineTo(plot.x1, y);
+    ctx.stroke();
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(fmtAxisMoney(tick, step), plot.x0 - 8, y);
+  });
+  xLabels.forEach((label) => {
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(label.text, label.x, plot.y1 + 8);
+  });
+  ctx.restore();
+}
+
+function xLabelsFor(points, plot, labelFn) {
+  if (points.length === 0) return [];
+  const count = Math.min(4, points.length);
+  const labels = [];
+  for (let i = 0; i < count; i += 1) {
+    const idx = count === 1 ? 0 : Math.round((i / (count - 1)) * (points.length - 1));
+    const x = plot.x0 + (points.length === 1 ? plot.innerW / 2 : (idx / (points.length - 1)) * plot.innerW);
+    labels.push({ x, text: labelFn(points[idx], idx) });
+  }
+  return labels;
+}
+
+function capitalPoints() {
+  return downsample(filterByDate(state.data.capitalSeries || [], state.range, state.data.today), 180);
+}
+
+function currentWindow() {
+  const win = state.data.windows && state.data.windows[state.range];
+  if (win) return win;
+  return {
+    from: state.data.today,
+    to: state.data.today,
+    amount: state.data.monthly && state.data.monthly.amount,
+    percent: state.data.monthly && state.data.monthly.percent,
+    closing: state.data.totalCapital,
+  };
+}
+
+function fillRoundRect(ctx, x, y, w, h, r) {
+  const rad = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') ctx.roundRect(x, y, w, h, rad);
+  else ctx.rect(x, y, w, h);
+  ctx.fill();
+}
+
+function drawAnchor(ctx, x, y, color) {
+  ctx.beginPath();
+  ctx.fillStyle = '#fff';
+  ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.fillStyle = color;
+  ctx.arc(x, y, 2.2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function applyCapitalHeader() {
+  const win = currentWindow();
+  const hover = state.hoverCapital;
+  const view = plotView(state.data.today, state.range, state.data.capitalSeries);
+  $('total-capital').textContent = hover ? hover.formatted : win.closing.formatted;
+  const pct = win.percent ? win.percent.formatted : '—';
+  $('window-pct').textContent = `${win.amount.delta} (${pct})`;
+  $('window-pct').className = pillClass(pct, true);
+  $('chart-hint').textContent = hover
+    ? `${fmtDate(hover.date)} · ${hover.formatted}`
+    : `${fmtDate(view.from)} — ${fmtDate(view.to)}`;
+}
+
+function drawCapitalFrame(progress) {
+  const canvas = $('capital-chart');
+  const { ctx, width, height } = sizeCanvas(canvas);
+  ctx.clearRect(0, 0, width, height);
+  const points = capitalPoints();
+  const plotBase = layoutPlot(width, height, { top: 12, right: 8, bottom: 26, left: 46 });
+  if (points.length === 0) {
+    charts.capitalLayout = null;
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.font = '13px "Segoe UI", system-ui, sans-serif';
+    ctx.fillText('Пока нет точек капитала', plotBase.x0, plotBase.y0 + 24);
+    return;
+  }
+  const values = points.map((p) => num(p.capital));
+  const scale = niceTicks(Math.min(...values), Math.max(...values), 3);
+  const plot = { ...plotBase, min: scale.min, max: scale.max };
+  const view = plotView(state.data.today, state.range, state.data.capitalSeries);
+  const xAt = (i) => xAtDate(points[i].date, view.from, view.to, plot);
+  const yAt = (v) => plot.y0 + ((plot.max - v) / (plot.max - plot.min)) * plot.innerH;
+  charts.capitalLayout = { points, plot, xAt, yAt, width, height };
+  drawGrid(ctx, plot, scale.ticks, timeAxisLabels(view.from, view.to, plot), 'rgba(255,255,255,0.72)', 'rgba(255,255,255,0.14)', scale.step);
+  const shown = Math.max(2, Math.round((points.length - 1) * progress) + 1);
+  const visible = points.slice(0, shown);
+  ctx.beginPath();
+  visible.forEach((p, i) => {
+    const x = xAt(i);
+    const y = yAt(values[i]);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+  ctx.lineWidth = 2.4;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+  ctx.lineTo(xAt(visible.length - 1), plot.y1);
+  ctx.lineTo(xAt(0), plot.y1);
+  ctx.closePath();
+  const fill = ctx.createLinearGradient(0, plot.y0, 0, plot.y1);
+  fill.addColorStop(0, 'rgba(255,255,255,0.32)');
+  fill.addColorStop(1, 'rgba(255,255,255,0.02)');
+  ctx.fillStyle = fill;
+  ctx.fill();
+  const last = visible.length - 1;
+  drawAnchor(ctx, xAt(last), yAt(values[last]), '#e85d04');
+  const hover = state.hoverCapital;
+  if (!hover) return;
+  const idx = points.findIndex((p) => p.date === hover.date);
+  if (idx < 0) return;
+  const hx = xAt(idx);
+  const hy = yAt(values[idx]);
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+  ctx.setLineDash([4, 4]);
+  ctx.moveTo(hx, plot.y0);
+  ctx.lineTo(hx, plot.y1);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.fillStyle = '#fff';
+  ctx.arc(hx, hy, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.fillStyle = '#e85d04';
+  ctx.arc(hx, hy, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function animateCapital() {
+  cancelAnimationFrame(charts.capitalAnim);
+  if (reducedMotion()) {
+    drawCapitalFrame(1);
+    return;
+  }
+  const start = performance.now();
+  const tick = (now) => {
+    const t = Math.min(1, (now - start) / 520);
+    drawCapitalFrame(1 - (1 - t) ** 3);
+    if (t < 1) charts.capitalAnim = requestAnimationFrame(tick);
+  };
+  tick(start);
+}
+
+function cumulativePoints() {
+  const series = state.data.cumulativePnlSeries || [];
+  const raw = filterByDate(series, state.range, state.data.today);
+  if (raw.length === 0) return [];
+  const from = rangeFrom(state.data.today, state.range);
+  let baseline = 0n;
+  if (from) {
+    const prev = series.find((point) => point.date === addDaysIso(from, -1));
+    if (prev) baseline = moneyToKopecks(prev.amount);
+  }
+  return downsample(
+    raw.map((point) => {
+      const k = moneyToKopecks(point.amount) - baseline;
+      return { date: point.date, value: Number(k) / 100, formatted: kopecksToDelta(k) };
+    }),
+    180,
+  );
+}
+
+function applyCumHeader() {
+  const win = currentWindow();
+  const hover = state.hoverCum;
+  const view = plotView(state.data.today, state.range, state.data.capitalSeries);
+  $('cum-kpi').textContent = hover ? hover.formatted : win.amount.delta;
+  const pct = win.percent ? win.percent.formatted : '—';
+  $('cum-pct').textContent = pct;
+  $('cum-pct').className = pillClass(pct, false);
+  $('cum-hint').textContent = hover
+    ? `${fmtDate(hover.date)} · сколько заработано с начала выбранного периода`
+    : `${fmtDate(view.from)} — ${fmtDate(view.to)} · без пополнений и выводов`;
+}
+
+function drawCumFrame(progress) {
+  const canvas = $('cum-chart');
+  const { ctx, width, height } = sizeCanvas(canvas);
+  ctx.clearRect(0, 0, width, height);
+  const points = cumulativePoints();
+  const view = plotView(state.data.today, state.range, state.data.capitalSeries);
+  const plotBase = layoutPlot(width, height, { top: 12, right: 8, bottom: 26, left: 46 });
+  if (points.length === 0) {
+    charts.cumLayout = null;
+    ctx.fillStyle = '#8a8680';
+    ctx.font = '13px "Segoe UI", system-ui, sans-serif';
+    ctx.fillText('Пока нет накопленной прибыли', plotBase.x0, plotBase.y0 + 24);
+    return;
+  }
+  const values = points.map((p) => p.value);
+  const scale = niceTicks(Math.min(0, ...values), Math.max(0, ...values), 3);
+  const plot = { ...plotBase, min: scale.min, max: scale.max };
+  const xAt = (i) => xAtDate(points[i].date, view.from, view.to, plot);
+  const yAt = (v) => plot.y0 + ((plot.max - v) / (plot.max - plot.min)) * plot.innerH;
+  charts.cumLayout = { points, plot, xAt, yAt, width, height };
+  drawGrid(ctx, plot, scale.ticks, timeAxisLabels(view.from, view.to, plot), '#8a8680', 'rgba(255,255,255,0.06)', scale.step);
+  const zeroY = yAt(0);
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(246,244,243,0.28)';
+  ctx.moveTo(plot.x0, zeroY);
+  ctx.lineTo(plot.x1, zeroY);
+  ctx.stroke();
+  const shown = Math.max(2, Math.round((points.length - 1) * progress) + 1);
+  const visible = points.slice(0, shown);
+  const lastVal = values[visible.length - 1];
+  const up = lastVal >= 0;
+  const stroke = up ? '#4ade80' : '#f87171';
+  ctx.beginPath();
+  visible.forEach((p, i) => {
+    const x = xAt(i);
+    const y = yAt(values[i]);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 2.4;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+  ctx.lineTo(xAt(visible.length - 1), zeroY);
+  ctx.lineTo(xAt(0), zeroY);
+  ctx.closePath();
+  const fill = ctx.createLinearGradient(0, plot.y0, 0, plot.y1);
+  if (up) {
+    fill.addColorStop(0, 'rgba(74, 222, 128, 0.28)');
+    fill.addColorStop(1, 'rgba(74, 222, 128, 0.02)');
+  } else {
+    fill.addColorStop(0, 'rgba(248, 113, 113, 0.08)');
+    fill.addColorStop(1, 'rgba(248, 113, 113, 0.28)');
+  }
+  ctx.fillStyle = fill;
+  ctx.fill();
+  const last = visible.length - 1;
+  drawAnchor(ctx, xAt(last), yAt(values[last]), values[last] < 0 ? '#e10f04' : '#1a9365');
+  const hover = state.hoverCum;
+  if (!hover) return;
+  const idx = points.findIndex((p) => p.date === hover.date);
+  if (idx < 0) return;
+  const hx = xAt(idx);
+  const hy = yAt(values[idx]);
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.moveTo(hx, plot.y0);
+  ctx.lineTo(hx, plot.y1);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.fillStyle = '#fff';
+  ctx.arc(hx, hy, 5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function animateCum() {
+  cancelAnimationFrame(charts.cumAnim);
+  if (reducedMotion()) {
+    drawCumFrame(1);
+    return;
+  }
+  const start = performance.now();
+  const tick = (now) => {
+    const t = Math.min(1, (now - start) / 520);
+    drawCumFrame(1 - (1 - t) ** 3);
+    if (t < 1) charts.cumAnim = requestAnimationFrame(tick);
+  };
+  tick(start);
+}
+
+function pnlSeries() {
+  const useMonths = state.range === '3M' || state.range === '1Y' || state.range === 'All';
+  if (useMonths) {
+    return filterMonths(state.data.monthlySeries || [], state.range, state.data.today).map((point) => ({
+      date: `${point.year}-${String(point.month).padStart(2, '0')}-01`,
+      label: `${MONTHS[point.month - 1]} ${String(point.year).slice(2)}`,
+      amount: point.amount,
+      formatted: point.formatted,
+      percent: point.percent,
+    }));
+  }
+  return filterByDate(state.data.dailyPnlSeries || [], state.range, state.data.today).map((point) => ({
+    date: point.date,
+    label: fmtDateShort(point.date),
+    amount: point.amount,
+    formatted: point.formatted,
+    percent: point.percent,
+  }));
+}
+
+function drawPnlFrame() {
+  const canvas = $('pnl-chart');
+  const { ctx, width, height } = sizeCanvas(canvas);
+  ctx.clearRect(0, 0, width, height);
+  const points = pnlSeries();
+  const plotBase = layoutPlot(width, height, { top: 12, right: 8, bottom: 26, left: 46 });
+  if (points.length === 0) {
+    charts.pnlLayout = null;
+    ctx.fillStyle = '#8a8680';
+    ctx.font = '13px "Segoe UI", system-ui, sans-serif';
+    ctx.fillText('В этом окне нет наблюдений прибыли', plotBase.x0, plotBase.y0 + 24);
+    return;
+  }
+  const values = points.map((p) => num(p.amount));
+  const scale = niceTicks(Math.min(0, ...values), Math.max(0, ...values), 3);
+  const plot = { ...plotBase, min: scale.min, max: scale.max };
+  const zeroY = plot.y0 + ((plot.max - 0) / (plot.max - plot.min)) * plot.innerH;
+  const gap = 4;
+  const barW = Math.max(4, Math.min(28, plot.innerW / points.length - gap));
+  const xAt = (i) => plot.x0 + (plot.innerW / points.length) * i + plot.innerW / points.length / 2;
+  charts.pnlLayout = { points, plot, xAt, barW, width, height };
+  drawGrid(ctx, plot, scale.ticks, xLabelsFor(points, plot, (p) => p.label), '#8a8680', 'rgba(255,255,255,0.06)', scale.step);
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(246,244,243,0.28)';
+  ctx.moveTo(plot.x0, zeroY);
+  ctx.lineTo(plot.x1, zeroY);
+  ctx.stroke();
+  points.forEach((p, i) => {
+    const x = xAt(i);
+    const y = plot.y0 + ((plot.max - values[i]) / (plot.max - plot.min)) * plot.innerH;
+    const top = Math.min(y, zeroY);
+    const h = Math.max(2, Math.abs(zeroY - y));
+    const active = state.hoverPnl && state.hoverPnl.date === p.date;
+    ctx.fillStyle = values[i] < 0 ? (active ? '#f87171' : '#e10f04') : active ? '#4ade80' : '#1a9365';
+    fillRoundRect(ctx, x - barW / 2, top, barW, h, 4);
+  });
+}
+
+function drawGauge(canvas, share) {
+  const { ctx, width, height } = sizeCanvas(canvas);
+  ctx.clearRect(0, 0, width, height);
+  const cx = width / 2;
+  const cy = height - 18;
+  const r = Math.min(88, width / 2 - 16);
+  ctx.lineWidth = 14;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.strokeStyle = '#2a2724';
+  ctx.arc(cx, cy, r, Math.PI, 0);
+  ctx.stroke();
+  const pct = share.defined ? Math.min(100, Math.max(0, num(share.value))) / 100 : 0;
+  ctx.beginPath();
+  ctx.strokeStyle = '#22c55e';
+  ctx.arc(cx, cy, r, Math.PI, Math.PI + Math.PI * pct);
+  ctx.stroke();
+}
+
+function placeTooltip(el, canvas, clientX, clientY, html) {
+  const wrap = canvas.parentElement;
+  const box = wrap.getBoundingClientRect();
+  el.innerHTML = html;
+  el.classList.remove('hidden');
+  const x = Math.min(box.width - 16, Math.max(16, clientX - box.left));
+  const y = Math.min(box.height - 8, Math.max(8, clientY - box.top));
+  el.style.left = `${x}px`;
+  el.style.top = `${y}px`;
+}
+
+function hideTooltip(el) {
+  el.classList.add('hidden');
+}
+
+function nearestByX(layout, clientX, canvas) {
+  if (!layout || layout.points.length === 0) return -1;
+  const rect = canvas.getBoundingClientRect();
+  const x = ((clientX - rect.left) / rect.width) * layout.width;
+  let best = 0;
+  let bestDist = Infinity;
+  layout.points.forEach((p, i) => {
+    const dist = Math.abs(layout.xAt(i) - x);
+    if (dist < bestDist) {
+      best = i;
+      bestDist = dist;
+    }
+  });
+  return best;
+}
+
+function renderOverview(options = {}) {
+  const d = state.data;
+  const animate = Boolean(options.animate);
+  const chartsOnly = Boolean(options.chartsOnly);
+  if (!chartsOnly) {
+    $('today-label').textContent = fmtDate(d.today);
+    $('updated-label').textContent = d.lastUpdateDate ? `обновлено ${fmtDate(d.lastUpdateDate)}` : '';
+    $('hero-balance').textContent = d.totalCapital ? d.totalCapital.formatted : '—';
+    $('hero-balance-pct').textContent = d.allTime.percent ? d.allTime.percent.formatted : '—';
+    $('hero-balance-pct').className = pillClass(d.allTime.percent ? d.allTime.percent.formatted : '', false);
+    $('daily-kpi').textContent = d.daily.formatted || '—';
+    $('month-kpi').textContent = d.monthly.amount ? `${d.monthly.amount.delta} (${d.monthly.percent.formatted})` : '—';
+    $('work-share').textContent = d.workingShare.formatted;
+    $('work-amount').textContent = d.workingCapital.formatted;
+    $('frozen-line').textContent = d.frozenCapital.amount === '0.00' ? '' : `Заморожено ${d.frozenCapital.formatted}`;
+    renderTicks(d.workingShare);
+    renderWatch(liveMaterials());
+    renderAllocation(liveMaterials());
+    renderFlows(d.flows);
+    drawGauge($('gauge'), d.workingShare);
+  }
+  applyCapitalHeader();
+  applyCumHeader();
+  const win = currentWindow();
+  $('pnl-total').textContent = `${win.amount.delta} · ${win.percent.formatted}`;
+  $('pnl-total').className = pillClass(win.percent.formatted, false);
+  $('pnl-caption').textContent =
+    state.range === '3M' || state.range === '1Y' || state.range === 'All' ? 'По месяцам' : 'По дням, когда обновляли баланс';
+  if (animate) {
+    animateCapital();
+    animateCum();
+  } else {
+    drawCapitalFrame(1);
+    drawCumFrame(1);
+  }
+  drawPnlFrame();
+}
+
+function renderAll() {
+  renderOverview({ animate: true });
+  fillCardSelects();
+  renderJournal();
+  renderArchive();
+}
+
+async function reload() {
+  state.data = await api('/api/overview');
+  renderAll();
+}
+
+const OP_STEPS = {
+  create: {
+    title: 'Добавить материал',
+    hint: 'Название и текущий баланс. Эта сумма — точка отсчёта, прибылью не считается.',
+    amount: 'Текущий баланс',
+  },
+  update: {
+    title: 'Зафиксировать прибыль',
+    hint: 'Введите новый баланс. Разница с предыдущим — прибыль или убыток.',
+    amount: 'Новый баланс',
+  },
+  topup: {
+    title: 'Пополнить материал',
+    hint: 'Введите новый баланс после пополнения, не величину добавки. Прибыль не изменится.',
+    amount: 'Новый баланс',
+  },
+  spend: {
+    title: 'Снять деньги с материала',
+    hint: 'Введите новый баланс после снятия, не сколько вывели. Прибыль не изменится.',
+    amount: 'Новый баланс',
+  },
+};
+
+function layerOpen() {
+  return state.archiveCardId !== null || state.sheetCardId !== null || !$('op-form').classList.contains('hidden');
+}
+
+function syncBackButton() {
+  const tg = telegram();
+  if (!tg || !tg.BackButton) return;
+  if (layerOpen()) tg.BackButton.show();
+  else tg.BackButton.hide();
+}
+
+function closeTop() {
+  if (state.archiveCardId !== null) {
+    closeArchive();
+    return;
+  }
+  if (state.sheetCardId !== null) {
+    closeSheet();
+    return;
+  }
+  if (!$('op-form').classList.contains('hidden')) showOpMenu();
+}
+
+function showOpMenu() {
+  $('op-kind').value = '';
+  $('op-menu').classList.remove('hidden');
+  $('op-form').classList.add('hidden');
+  showError('op-error', '');
+  $('op-amount').value = '';
+  $('op-name').value = '';
+  syncBackButton();
+}
+
+function openOp(kind, cardId) {
+  const step = OP_STEPS[kind];
+  if (!step) return;
+  $('op-kind').value = kind;
+  $('op-title').textContent = step.title;
+  $('op-hint').textContent = step.hint;
+  $('op-amount-label').textContent = step.amount;
+  $('name-field').classList.toggle('hidden', kind !== 'create');
+  $('card-field').classList.toggle('hidden', kind === 'create');
+  $('op-name').required = kind === 'create';
+  $('op-menu').classList.add('hidden');
+  $('op-form').classList.remove('hidden');
+  showError('op-error', '');
+  if (kind !== 'create' && cardId) $('op-card').value = String(cardId);
+  syncBackButton();
+  const focusId = kind === 'create' ? 'op-name' : 'op-amount';
+  requestAnimationFrame(() => $(focusId).focus());
+}
+
+function escapeHtml(text) {
+  return String(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
+function showError(id, message) {
+  const el = $(id);
+  el.textContent = message;
+  el.classList.toggle('hidden', !message);
+}
+
+function openSheet(cardId) {
+  const item = liveMaterials().find((row) => row.id === cardId);
+  if (!item) return;
+  state.sheetCardId = cardId;
+  const frozen = item.status === 'frozen';
+  $('sheet-title').textContent = item.name;
+  $('sheet-balance').textContent = item.balance.formatted;
+  $('sheet-primary').textContent = frozen ? 'Вернуть' : 'Заморозить';
+  $('sheet-primary').dataset.action = frozen ? 'unfreeze' : 'freeze';
+  showError('sheet-error', '');
+  $('sheet').classList.remove('hidden');
+  syncBackButton();
+}
+
+function closeSheet() {
+  state.sheetCardId = null;
+  $('sheet').classList.add('hidden');
+  syncBackButton();
+}
+
+function openArchive(cardId) {
+  const item = liveMaterials().find((row) => row.id === cardId);
+  if (!item) return;
+  closeSheet();
+  state.archiveCardId = cardId;
+  $('archive-text').textContent = `«${item.name}» · ${item.balance.formatted}. История сохранится.`;
+  const zero = item.balance.amount === '0.00';
+  $('archive-reason-wrap').classList.toggle('hidden', zero);
+  $('archive-target-wrap').classList.add('hidden');
+  $('archive-reason').value = 'WITHDRAWN';
+  showError('archive-error', '');
+  $('archive-target').querySelectorAll('option').forEach((opt) => {
+    opt.hidden = Number(opt.value) === cardId;
+  });
+  $('archive-dialog').classList.remove('hidden');
+  syncBackButton();
+}
+
+function closeArchive() {
+  state.archiveCardId = null;
+  $('archive-dialog').classList.add('hidden');
+  syncBackButton();
+}
+
+function bindPointer(canvas, move, leave) {
+  canvas.addEventListener('pointermove', move);
+  canvas.addEventListener('pointerdown', move);
+  canvas.addEventListener('pointerleave', leave);
+  canvas.addEventListener('pointercancel', leave);
+}
+
+function bindCharts() {
+  const capital = $('capital-chart');
+  const pnl = $('pnl-chart');
+  const cum = $('cum-chart');
+  const capTip = $('capital-tooltip');
+  const pnlTip = $('pnl-tooltip');
+  const cumTip = $('cum-tooltip');
+  bindPointer(
+    capital,
+    (event) => {
+      const idx = nearestByX(charts.capitalLayout, event.clientX, capital);
+      if (idx < 0) return;
+      const point = charts.capitalLayout.points[idx];
+      state.hoverCapital = point;
+      applyCapitalHeader();
+      drawCapitalFrame(1);
+      placeTooltip(capTip, capital, event.clientX, event.clientY, `<strong>${escapeHtml(point.formatted)}</strong><span>${escapeHtml(fmtDate(point.date))}</span>`);
+    },
+    () => {
+      state.hoverCapital = null;
+      hideTooltip(capTip);
+      applyCapitalHeader();
+      drawCapitalFrame(1);
+    },
+  );
+  bindPointer(
+    cum,
+    (event) => {
+      const idx = nearestByX(charts.cumLayout, event.clientX, cum);
+      if (idx < 0) return;
+      const point = charts.cumLayout.points[idx];
+      state.hoverCum = point;
+      applyCumHeader();
+      drawCumFrame(1);
+      placeTooltip(cumTip, cum, event.clientX, event.clientY, `<strong>${escapeHtml(point.formatted)}</strong><span>${escapeHtml(fmtDate(point.date))}</span>`);
+    },
+    () => {
+      state.hoverCum = null;
+      hideTooltip(cumTip);
+      applyCumHeader();
+      drawCumFrame(1);
+    },
+  );
+  bindPointer(
+    pnl,
+    (event) => {
+      const idx = nearestByX(charts.pnlLayout, event.clientX, pnl);
+      if (idx < 0) return;
+      const point = charts.pnlLayout.points[idx];
+      state.hoverPnl = point;
+      drawPnlFrame();
+      const pct = point.percent && point.percent.formatted ? point.percent.formatted : '—';
+      placeTooltip(pnlTip, pnl, event.clientX, event.clientY, `<strong>${escapeHtml(point.formatted)}</strong><span>${escapeHtml(point.label)} · ${escapeHtml(pct)}</span>`);
+    },
+    () => {
+      state.hoverPnl = null;
+      hideTooltip(pnlTip);
+      drawPnlFrame();
+    },
+  );
+}
+
+function bindUi() {
+  $('op-menu').addEventListener('click', (event) => {
+    const btn = event.target.closest('button[data-kind]');
+    if (!btn) return;
+    openOp(btn.dataset.kind);
+  });
+  $('op-back').addEventListener('click', () => showOpMenu());
+  $('op-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    showError('op-error', '');
+    const kind = $('op-kind').value;
+    const amount = $('op-amount').value;
+    $('op-submit').disabled = true;
+    try {
+      if (kind === 'create') {
+        await api('/api/cards', { method: 'POST', body: JSON.stringify({ name: $('op-name').value, amount }) });
+      } else {
+        const cardId = Number($('op-card').value);
+        if (kind === 'update') {
+          await api('/api/balances', { method: 'POST', body: JSON.stringify({ cardId, amount }) });
+        } else if (kind === 'topup') {
+          await api('/api/topup', { method: 'POST', body: JSON.stringify({ cardId, newAmount: amount }) });
+        } else {
+          await api('/api/spend', { method: 'POST', body: JSON.stringify({ cardId, newAmount: amount }) });
+        }
+      }
+      $('op-amount').value = '';
+      $('op-name').value = '';
+      showOpMenu();
+      await reload();
+    } catch (error) {
+      showError('op-error', error.message);
+    } finally {
+      $('op-submit').disabled = false;
+    }
+  });
+  document.querySelectorAll('.tab').forEach((btn) => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+  $('ranges').addEventListener('click', (event) => {
+    const btn = event.target.closest('button[data-range]');
+    if (!btn) return;
+    state.range = btn.dataset.range;
+    state.hoverCapital = null;
+    state.hoverPnl = null;
+    state.hoverCum = null;
+    hideTooltip($('capital-tooltip'));
+    hideTooltip($('pnl-tooltip'));
+    hideTooltip($('cum-tooltip'));
+    document.querySelectorAll('#ranges button').forEach((el) => el.classList.toggle('is-active', el === btn));
+    renderOverview({ animate: true, chartsOnly: true });
+  });
+  $('journal').addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-fix]');
+    if (!btn) return;
+    openOp('update', btn.dataset.fix);
+    switchTab('ops');
+  });
+  $('watchlist').addEventListener('click', (event) => {
+    const tile = event.target.closest('.material');
+    if (!tile) return;
+    openSheet(Number(tile.dataset.cardId));
+  });
+  $('sheet-backdrop').addEventListener('click', () => closeSheet());
+  $('sheet-cancel').addEventListener('click', () => closeSheet());
+  $('sheet-primary').addEventListener('click', async () => {
+    const id = state.sheetCardId;
+    const action = $('sheet-primary').dataset.action;
+    if (id === null) return;
+    showError('sheet-error', '');
+    $('sheet-primary').disabled = true;
+    try {
+      const path = action === 'unfreeze' ? '/api/unfreeze' : '/api/freeze';
+      await api(path, { method: 'POST', body: JSON.stringify({ cardId: id }) });
+      closeSheet();
+      await reload();
+    } catch (error) {
+      showError('sheet-error', error.message);
+    } finally {
+      $('sheet-primary').disabled = false;
+    }
+  });
+  $('sheet-remove').addEventListener('click', () => {
+    if (state.sheetCardId === null) return;
+    openArchive(state.sheetCardId);
+  });
+  $('archive-reason').addEventListener('change', () => {
+    $('archive-target-wrap').classList.toggle('hidden', $('archive-reason').value !== 'TRANSFERRED');
+  });
+  $('archive-cancel').addEventListener('click', () => closeArchive());
+  $('archive-backdrop').addEventListener('click', () => closeArchive());
+  $('archive-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const item = liveMaterials().find((row) => row.id === state.archiveCardId);
+    if (!item) return;
+    const zero = item.balance.amount === '0.00';
+    const payload = { cardId: state.archiveCardId, reason: zero ? 'WITHDRAWN' : $('archive-reason').value };
+    if (payload.reason === 'TRANSFERRED') payload.targetCardId = Number($('archive-target').value);
+    $('archive-submit').disabled = true;
+    try {
+      await api('/api/archive', { method: 'POST', body: JSON.stringify(payload) });
+      closeArchive();
+      await reload();
+    } catch (error) {
+      showError('archive-error', error.message);
+    } finally {
+      $('archive-submit').disabled = false;
+    }
+  });
+  const link = $('usdt-rate');
+  link.addEventListener('click', (event) => {
+    const tg = telegram();
+    if (!tg || typeof tg.openLink !== 'function') return;
+    event.preventDefault();
+    tg.openLink(link.href);
+  });
+  const tg = telegram();
+  if (tg && tg.BackButton && !backBound) {
+    backBound = true;
+    tg.BackButton.onClick(() => closeTop());
+  }
+}
+
+function showGate(message) {
+  $('gate-text').textContent = message;
+  $('gate').classList.remove('hidden');
+  $('app').classList.add('hidden');
+  $('tabbar').classList.add('hidden');
+}
+
+function showApp() {
+  $('gate').classList.add('hidden');
+  $('app').classList.remove('hidden');
+  $('tabbar').classList.remove('hidden');
+}
+
+(async function boot() {
+  initData = bootTelegram();
+  if (initData === '') {
+    showGate('Откройте из Telegram');
+    return;
+  }
+  try {
+    await api('/api/auth/webapp', { method: 'POST', body: JSON.stringify({ initData }) });
+    showApp();
+    showOpMenu();
+    bindCharts();
+    bindUi();
+    startQuotePolling();
+    await reload();
+    let resizeFrame = 0;
+    window.addEventListener('resize', () => {
+      if (!state.data) return;
+      cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(() => renderOverview({ animate: false }));
+    });
+  } catch {
+    showGate('Не удалось войти. Закройте и откройте приложение снова.');
+  }
+})();

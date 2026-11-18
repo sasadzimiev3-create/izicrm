@@ -8,6 +8,21 @@ function portNumber(value: string, name: string): number {
   return parsed;
 }
 
+/** Пустая строка — Mini App выключен. Иначе только https: Telegram не откроет http. */
+function miniAppUrl(value: string | undefined): string | null {
+  if (value === undefined) {
+    return null;
+  }
+  const trimmed = value.trim().replace(/\/+$/u, '');
+  if (trimmed === '') {
+    return null;
+  }
+  if (!trimmed.startsWith('https://')) {
+    throw new Error('WEB_MINIAPP_URL must start with https://');
+  }
+  return trimmed;
+}
+
 const envSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   /** HTTP/SOCKS5 до api.telegram.org, если прямого доступа нет. Пример: http://user:pass@host:8000 */
@@ -23,6 +38,8 @@ const envSchema = z.object({
   WEB_PORT: z.string().default('3000').transform((value) => portNumber(value, 'WEB_PORT')),
   WEB_PUBLIC_URL: z.string().optional(),
   WEB_SESSION_SECRET: z.string().optional(),
+  /** HTTPS Mini App, например https://31.76.53.4.sslip.io/app. Пусто — кнопки нет. */
+  WEB_MINIAPP_URL: z.string().optional().transform((value) => miniAppUrl(value)),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -16,6 +16,8 @@ export type ReportRateLimiter = {
 
 export type WebCabinet = {
   issueLoginUrl(userId: UserId, telegramId: string): string | null;
+  /** HTTPS Mini App. Пусто — кнопки в боте нет, браузерный кабинет остаётся. */
+  miniAppUrl: string | null;
 };
 
 export type TelegramDeps = {

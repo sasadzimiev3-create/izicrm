@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { dashboardKeyboard, mainKeyboard, settingsKeyboard } from '../../../src/interface/telegram/keyboards/keyboards.js';
+import {
+  dashboardKeyboard,
+  mainKeyboard,
+  settingsKeyboard,
+  toInlineMarkup,
+} from '../../../src/interface/telegram/keyboards/keyboards.js';
 import { cardId } from '../../../src/domain/cards/card.js';
 import { Money } from '../../../src/domain/money/money.js';
 
@@ -31,5 +36,16 @@ describe('главное меню', () => {
     expect(labels.some((text) => /кабинет/i.test(text))).toBe(true);
     expect(labels.some((text) => text.includes('Удалить'))).toBe(true);
     expect(labels.join('\n')).not.toMatch(/Переименовать|стикер/i);
+  });
+
+  it('приложение открывается кнопкой web_app над веб-кабинетом', () => {
+    const url = 'https://31.76.53.4.sslip.io/app';
+    const rows = settingsKeyboard(3, url);
+    const first = rows[0]?.[0];
+    expect(first).toEqual({ text: '📱 Приложение', webApp: url });
+    const cabinet = rows[1]?.[0];
+    expect(cabinet !== undefined && 'data' in cabinet ? cabinet.text : '').toMatch(/Веб-кабинет/);
+    expect(toInlineMarkup(rows).inline_keyboard[0]).toEqual([{ text: '📱 Приложение', web_app: { url } }]);
+    expect(settingsKeyboard(1, null).flat().some((button) => button.text.includes('Приложение'))).toBe(false);
   });
 });

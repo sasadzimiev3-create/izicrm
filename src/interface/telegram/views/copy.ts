@@ -46,6 +46,7 @@ export const COPY = {
   settingsTitle: 'Настройки',
   report: 'Отчёт в Excel',
   webCabinet: 'Веб-кабинет',
+  miniApp: 'Приложение',
   webOpen: 'Открыть кабинет',
   webLink: 'Ссылка на кабинет. Действует 15 минут. Данные те же, что в Telegram.',
   webUnavailable: 'Веб-кабинет пока не настроен (нужен WEB_PUBLIC_URL).',

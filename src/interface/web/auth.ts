@@ -4,6 +4,7 @@ import { userId, type UserId } from '../../domain/cards/card.js';
 
 const LOGIN_TTL_SEC = 15 * 60;
 const SESSION_TTL_SEC = 14 * 24 * 60 * 60;
+const WEBAPP_MAX_AGE_SEC = 24 * 60 * 60;
 export const SESSION_COOKIE = 'izicrm_session';
 
 export type TokenKind = 'login' | 'session';
@@ -23,6 +24,8 @@ export type WebAuth = {
   issueLoginUrl(userId: UserId, telegramId: string): string | null;
   verify(token: string, kind: TokenKind, nowSec?: number): AuthPrincipal | null;
   verifyTelegramLogin(fields: Record<string, string>, nowSec?: number): string | null;
+  /** Mini App initData. Ключ другой, чем у Login Widget: HMAC("WebAppData", bot token). */
+  verifyTelegramWebApp(initData: string, nowSec?: number): string | null;
 };
 
 function b64url(value: Buffer | string): string {
@@ -87,7 +90,8 @@ function parseToken(secret: string, token: string, kind: TokenKind, nowSec: numb
 
 /**
  * Подпись входа: HMAC от секрета. Логин живёт 15 минут, сессия — 14 дней.
- * Telegram Login Widget проверяется по документации Bot API.
+ * Login Widget: ключ SHA-256 от токена бота.
+ * Mini App: ключ HMAC-SHA256("WebAppData", токен бота). Это разные проверки.
  */
 export function createWebAuth(opts: {
   secret: string;
@@ -151,7 +155,88 @@ export function createWebAuth(opts: {
       }
       return telegramId;
     },
+    verifyTelegramWebApp(initData, at = nowSec()) {
+      return verifyWebAppInitData(botToken, initData, at);
+    },
   };
+}
+
+/**
+ * Secure только за HTTPS-прокси. Прямой запрос на :3000 флаг не получает,
+ * даже если клиент прислал другой протокол вторым значением.
+ */
+export function cookieIsSecure(forwardedProto: string | string[] | undefined, publicUrlSecure: boolean): boolean {
+  const raw = Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto;
+  if (typeof raw === 'string') {
+    const first = raw.split(',')[0]?.trim().toLowerCase();
+    if (first === 'https') {
+      return true;
+    }
+  }
+  return publicUrlSecure;
+}
+
+function verifyWebAppInitData(botToken: string | undefined, initData: string, at: number): string | null {
+  if (botToken === undefined || botToken === '' || initData.trim() === '') {
+    return null;
+  }
+  const raw = initData.startsWith('?') ? initData.slice(1) : initData;
+  const params = new URLSearchParams(raw);
+  const hash = params.get('hash');
+  const authDateRaw = params.get('auth_date');
+  const userRaw = params.get('user');
+  if (hash === null || authDateRaw === null || userRaw === null) {
+    return null;
+  }
+  if (!/^\d+$/u.test(authDateRaw)) {
+    return null;
+  }
+  const authDate = Number(authDateRaw);
+  if (!Number.isSafeInteger(authDate) || at - authDate > WEBAPP_MAX_AGE_SEC) {
+    return null;
+  }
+  const entries: [string, string][] = [];
+  for (const [key, value] of params.entries()) {
+    if (key !== 'hash') {
+      entries.push([key, value]);
+    }
+  }
+  entries.sort((left, right) => {
+    if (left[0] < right[0]) {
+      return -1;
+    }
+    if (left[0] > right[0]) {
+      return 1;
+    }
+    return 0;
+  });
+  const checkString = entries.map(([key, value]) => `${key}=${value}`).join('\n');
+  const secretKey = createHmac('sha256', 'WebAppData').update(botToken).digest();
+  const digest = createHmac('sha256', secretKey).update(checkString).digest('hex');
+  if (!equal(digest, hash.toLowerCase())) {
+    return null;
+  }
+  return telegramIdFromUserJson(userRaw);
+}
+
+function telegramIdFromUserJson(userRaw: string): string | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(userRaw) as unknown;
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null || !('id' in parsed)) {
+    return null;
+  }
+  const id = parsed.id;
+  if (typeof id === 'number' && Number.isSafeInteger(id) && id > 0) {
+    return String(id);
+  }
+  if (typeof id === 'string' && /^[1-9]\d*$/u.test(id)) {
+    return id;
+  }
+  return null;
 }
 
 export function sessionCookie(token: string, secure: boolean): string {

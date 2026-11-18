@@ -65,10 +65,33 @@ services:
       WEB_PORT: "3000"
       WEB_PUBLIC_URL: ${WEB_PUBLIC_URL:-}
       WEB_SESSION_SECRET: ${WEB_SESSION_SECRET:-}
+      WEB_MINIAPP_URL: ${WEB_MINIAPP_URL:-}
     ports:
       - "3000:3000"
     stop_signal: SIGTERM
 
+  # HTTPS для Mini App, если порты 80 и 443 свободны. Кабинет на порту 3000 не меняется.
+  # Запуск: docker compose --profile miniapp up -d
+  # На боевом VPS эти порты уже занимает nginx другого сайта — там этот профиль не запускать.
+  # Имя — MINIAPP_HOST (по умолчанию 31.76.53.4.sslip.io). Если Let's Encrypt откажет, смените его на DuckDNS.
+  caddy:
+    profiles: ["miniapp"]
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - bot
+    environment:
+      MINIAPP_HOST: ${MINIAPP_HOST:-31.76.53.4.sslip.io}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
 volumes:
   pgdata:
   backups:
+  caddy_data:
+  caddy_config:

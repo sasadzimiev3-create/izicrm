@@ -4,6 +4,7 @@ import { assertApplicationRole, createPool } from './infrastructure/db/pool.js';
 import { createDataAccess } from './infrastructure/db/data-access.js';
 import { createTelegramBot } from './infrastructure/telegram/bot.js';
 import { registerTelegramHandlers } from './interface/telegram/handlers/register.js';
+import { COPY } from './interface/telegram/views/copy.js';
 import { createWebAuth } from './interface/web/auth.js';
 import { createRapiraQuoteSource } from './infrastructure/market/rapira.js';
 import { defaultPublicDir, startWebServer } from './interface/web/server.js';
@@ -28,10 +29,12 @@ async function main(): Promise<void> {
   const tracked = { ...access, uow: trackUnitOfWork(access.uow, gate) };
   const publicUrl =
     env.WEB_PUBLIC_URL === undefined || env.WEB_PUBLIC_URL === '' ? null : env.WEB_PUBLIC_URL;
+  const miniAppUrl = env.WEB_MINIAPP_URL ?? null;
   const authSecret = env.WEB_SESSION_SECRET === undefined || env.WEB_SESSION_SECRET === '' ? token : env.WEB_SESSION_SECRET;
   const auth = createWebAuth({ secret: authSecret, publicUrl, botToken: token });
   const deps = createTelegramDeps(tracked, {
     webCabinet: {
+      miniAppUrl,
       issueLoginUrl(userId, telegramId) {
         return auth.issueLoginUrl(userId, telegramId);
       },
@@ -77,6 +80,20 @@ async function main(): Promise<void> {
     try {
       const me = await bot.api.getMe();
       webDeps.botUsername = me.username ?? null;
+      if (miniAppUrl !== null) {
+        try {
+          await bot.api.setChatMenuButton({
+            menu_button: {
+              type: 'web_app',
+              text: COPY.miniApp,
+              web_app: { url: miniAppUrl },
+            },
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'unknown';
+          console.error(`mini app menu button skipped: ${message}`);
+        }
+      }
       console.error(`telegram polling as @${me.username}`);
       await bot.start();
       break;

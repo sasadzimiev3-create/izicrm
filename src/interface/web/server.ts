@@ -17,6 +17,7 @@ import type { AppLogger } from '../telegram/log.js';
 
 import {
   clearSessionCookie,
+  cookieIsSecure,
   readCookie,
   SESSION_COOKIE,
   sessionCookie,
@@ -123,16 +124,20 @@ async function handleRequest(
       return;
     }
     if (method === 'GET' && url.pathname === '/auth') {
-      await handleAuthRedirect(deps, url, res);
+      await handleAuthRedirect(deps, url, req, res);
       return;
     }
     if (method === 'POST' && url.pathname === '/api/auth/telegram') {
       await handleTelegramLogin(deps, req, res);
       return;
     }
+    if (method === 'POST' && url.pathname === '/api/auth/webapp') {
+      await handleWebAppLogin(deps, req, res);
+      return;
+    }
     if (method === 'POST' && url.pathname === '/api/logout') {
       res.statusCode = 204;
-      res.setHeader('set-cookie', clearSessionCookie(deps.auth.cookieSecure));
+      res.setHeader('set-cookie', clearSessionCookie(secureCookie(deps, req)));
       res.end();
       return;
     }
@@ -161,6 +166,10 @@ async function handleRequest(
       await sendFile(deps.publicDir, 'login.html', res);
       return;
     }
+    if (url.pathname === '/app' || url.pathname === '/app/') {
+      await sendFile(deps.publicDir, 'mini.html', res);
+      return;
+    }
     await sendFile(deps.publicDir, url.pathname.slice(1), res);
   } catch (error) {
     sendCaught(deps, res, error);
@@ -175,7 +184,12 @@ function sessionOf(deps: WebDeps, req: http.IncomingMessage): AuthPrincipal | nu
   return deps.auth.verify(token, 'session');
 }
 
-async function handleAuthRedirect(deps: WebDeps, url: URL, res: http.ServerResponse): Promise<void> {
+async function handleAuthRedirect(
+  deps: WebDeps,
+  url: URL,
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+): Promise<void> {
   const token = url.searchParams.get('token');
   if (token === null || token === '') {
     redirect(res, '/login');
@@ -188,9 +202,13 @@ async function handleAuthRedirect(deps: WebDeps, url: URL, res: http.ServerRespo
   }
   const session = deps.auth.issueSessionToken(principal.userId, principal.telegramId);
   res.statusCode = 302;
-  res.setHeader('set-cookie', sessionCookie(session, deps.auth.cookieSecure));
+  res.setHeader('set-cookie', sessionCookie(session, secureCookie(deps, req)));
   res.setHeader('location', '/');
   res.end();
+}
+
+function secureCookie(deps: WebDeps, req: http.IncomingMessage): boolean {
+  return cookieIsSecure(req.headers['x-forwarded-proto'], deps.auth.cookieSecure);
 }
 
 async function handleTelegramLogin(
@@ -217,7 +235,30 @@ async function handleTelegramLogin(
   );
   const session = deps.auth.issueSessionToken(user.id, user.telegramId);
   res.statusCode = 204;
-  res.setHeader('set-cookie', sessionCookie(session, deps.auth.cookieSecure));
+  res.setHeader('set-cookie', sessionCookie(session, secureCookie(deps, req)));
+  res.end();
+}
+
+const webAppLoginSchema = z.object({ initData: z.string().min(1).max(16_384) });
+
+async function handleWebAppLogin(deps: WebDeps, req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  const body = await readJson(req);
+  const parsed = webAppLoginSchema.safeParse(body);
+  if (!parsed.success) {
+    json(res, 401, { error: 'Вход через Telegram не принят' });
+    return;
+  }
+  const telegramId = deps.auth.verifyTelegramWebApp(parsed.data.initData);
+  if (telegramId === null) {
+    json(res, 401, { error: 'Вход через Telegram не принят' });
+    return;
+  }
+  const user = await deps.uow.withTelegramIdentity(telegramId, (tx) =>
+    deps.users.findOrCreateByTelegramId(telegramId, tx),
+  );
+  const session = deps.auth.issueSessionToken(user.id, user.telegramId);
+  res.statusCode = 204;
+  res.setHeader('set-cookie', sessionCookie(session, secureCookie(deps, req)));
   res.end();
 }
 

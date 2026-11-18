@@ -101,7 +101,7 @@ src/
     auth.ts  serialize.ts  server.ts
   config/            env.ts  clock.ts
   main.ts
-web/public/          index.html  login.html  app.css  app.js
+web/public/          index.html  login.html  app.css  app.js  mini.html  mini.css  mini.js
 migrations/          NNN_*.sql
 tests/               unit/  property/  integration/  security/  e2e/
 docs/

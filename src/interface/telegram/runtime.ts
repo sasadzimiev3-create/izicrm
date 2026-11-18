@@ -95,6 +95,10 @@ function balanceMap(dashboard: Dashboard): Map<CardId, Money> {
   return map;
 }
 
+function settingsKeys(deps: TelegramDeps, rev: number): Keyboard {
+  return settingsKeyboard(rev, deps.webCabinet?.miniAppUrl ?? null);
+}
+
 async function send(
   sender: TelegramSender,
   text: string,
@@ -576,12 +580,12 @@ async function runEffect(
       await sendHome(deps, user, sender, rev);
       return;
     case 'ShowSettings':
-      await send(sender, COPY.settingsTitle, settingsKeyboard(rev));
+      await send(sender, COPY.settingsTitle, settingsKeys(deps, rev));
       return;
     case 'SendWebLink': {
       const url = deps.webCabinet?.issueLoginUrl(user.id, user.telegramId) ?? null;
       if (url === null) {
-        await send(sender, COPY.webUnavailable, settingsKeyboard(rev));
+        await send(sender, COPY.webUnavailable, settingsKeys(deps, rev));
         return;
       }
       await send(sender, COPY.webLink, webLinkKeyboard(url, rev));

@@ -9,7 +9,8 @@ import { formatCardTitle } from '../views/dashboard.view.js';
 export type KeyboardButtonStyle = 'primary' | 'success' | 'danger';
 export type KeyboardButton =
   | { text: string; data: string; style?: KeyboardButtonStyle }
-  | { text: string; url: string };
+  | { text: string; url: string }
+  | { text: string; webApp: string };
 export type Keyboard = KeyboardButton[][];
 
 function btn(
@@ -95,14 +96,19 @@ export function expenseMenuKeyboard(rev: number): Keyboard {
   ];
 }
 
-export function settingsKeyboard(rev: number): Keyboard {
-  return [
+export function settingsKeyboard(rev: number, miniAppUrl?: string | null): Keyboard {
+  const rows: Keyboard = [];
+  if (miniAppUrl !== undefined && miniAppUrl !== null && miniAppUrl !== '') {
+    rows.push([{ text: `📱 ${COPY.miniApp}`, webApp: miniAppUrl }]);
+  }
+  rows.push(
     [btn(`💻 ${COPY.webCabinet}`, 'web', null, rev)],
     [btn(`📊 ${COPY.report}`, 'report', null, rev)],
     [btn(`🗑 ${COPY.deleteMaterial}`, 'arch_pick', null, rev)],
     [btn(`📁 ${COPY.archiveMaterials}`, 'arch_list', null, rev)],
     backRow(rev),
-  ];
+  );
+  return rows;
 }
 
 export function webLinkKeyboard(url: string, rev: number): Keyboard {
@@ -166,11 +172,15 @@ export function toInlineMarkup(keyboard: Keyboard): {
   inline_keyboard: (
     | { text: string; callback_data: string; style?: KeyboardButtonStyle }
     | { text: string; url: string }
+    | { text: string; web_app: { url: string } }
   )[][];
 } {
   return {
     inline_keyboard: keyboard.map((row) =>
       row.map((button) => {
+        if ('webApp' in button) {
+          return { text: button.text, web_app: { url: button.webApp } };
+        }
         if ('url' in button) {
           return { text: button.text, url: button.url };
         }
